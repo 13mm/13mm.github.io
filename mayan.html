@@ -1,0 +1,88 @@
+﻿<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>oracle</title>
+  <link rel="icon" href="favicon.gif">
+  <style type="text/css">
+  @font-face {font-family: Dspell;src: url(Dreamspell-Regular.ttf);}
+  body{color:#555;}
+  a:link { color: #ddd; }
+  a:visited { color: #ddd; }
+  a:hover { color: #bbb; }
+  a:active { color: #ddd; }
+  .center{margin: auto; width:300px;text-align:center;border-bottom:solid;}
+  
+  .spell{font-style:normal;font-family: Dspell;font-size:5em;text-align:center;}
+  
+  .boxA {width:100%;height:100px;margin:6px auto;padding:0px;display: flex;  justify-content: center;align-items: center; }
+  .box1, .box2, .box3, .box4 , .box5 , .box6 , .box7 , .box8 , .box9 {margin:2px;width: 33%;  height: 100%;display: block;}
+  
+  .boxRED{margin:1px;border: 2px dotted #f9548e;width: 33%; height: 100%;color: #f9548e;display: flex;  justify-content: center;align-items: center;}
+  .boxWHITE{margin:1px;border: 2px dotted #bbb; width: 33%; height: 100%;color: #aaa;display: flex;  justify-content: center;align-items: center;}
+  .boxBLUE{margin:1px;border: 2px dotted #7585ef; width: 33%; height: 100%;color: #7585ef;display: flex;  justify-content: center;align-items: center;}
+  .boxYELLOW{margin:1px; border: 2px dotted #f1f42c; width: 33%; height: 100%;color: #f1f42c;display: flex;  justify-content: center;align-items: center;}
+  .texWHITE{color: #aaa;}
+  .texRED{ color: #f9548e;}
+  .texBLUE{  color: #7585ef;}
+  .texYELLOW{ color: #f1f42c;}
+  
+  form,input{background:#eee;color:#78e;padding:3px;margin:20px auto;text-align:center;}
+  .img-center{display:block;margin:auto;text-align:center;}
+  </style>
+</head>
+
+<body>
+  <section class="section">
+    <div class="container">
+      <br>
+      <a href="index.html">
+        <img class="img-center" src="mayan.png" width="100px" height="120px">
+      </a>
+      <br>
+      <script src="mayan.js"></script>
+      <div id="song1">
+      </div>
+      <script>
+  MakeKinSong('song1');
+      </script>
+      <form name="fm">西暦
+        <input size="7" type="text" name="Y">年
+        <input size="7" type="text" name="M">月
+        <input size="7" type="text" name="D">日
+        <br>
+        <input type="button" value="<-<-<-" onclick="Kindec()">
+        <input type="button" value="オラクルを表示" onclick="ORC(1)">
+        <input type="button" value="->->->" onclick="Kininc()">
+      </form>
+      <br>
+      <div id="midashi">
+      </div>
+      <div id="song2">
+      </div>
+      <form name="fm2">
+        <input type="button" value="<-<-<-" onclick="Kindec()"> 
+        <input type="button" value="->->->" onclick="Kininc()">
+        <br>Mayan
+        <input size="7" type="text" name="KIN">を探索します。
+        <input type="button" value="オラクルを表示" onclick="ORC(2)">
+        <br>西暦
+        <input size="7" type="text" name="YYY">年から
+        <input size="7" type="text" name="N">年間を対象に
+        <input type="button" value="リストアップ" onclick="CalKin()">
+      </form>
+      <br>
+      <form name="fm3">
+        <input type="button" value="すべてのMayanを表示" onclick="Kin260()">
+      </form>
+      <br>
+      <div id="k0">
+      </div>
+      <p class="img-center">Original Copyright © Jose and Lloydine Arguelles (Japanese Translation by PAN Japan)</p>
+    </div>
+  </section>
+</body>
+
+</html>
