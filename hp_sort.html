@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>ハロプロ 現役メンバーソート</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      text-align: center;
+      background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+      color: #343a40;
+      padding: 20px;
+    }
+    h1 {
+      font-size: 2em;
+      margin-bottom: 20px;
+    }
+    /* 対戦画面全体 */
+    #battle {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    /* 対戦ペアを包むコンテナ */
+    .battle-container {
+      display: flex;
+      gap: 15px;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    /* 個々のメンバー表示 */
+    .member {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .member-img {
+      max-width: 130px;
+      height: auto;
+      border-radius: 8px;
+      box-shadow: 0px 4px 8px rgba(0,0,0,0.2);
+      cursor: pointer;
+      transition: transform 0.3s ease;
+      object-fit: contain;
+    }
+    .member-img:hover {
+      transform: scale(1.05);
+    }
+    .member-name {
+      font-size: 1em;
+      margin-top: 5px;
+      color: #333;
+    }
+    .btn {
+      background-color: #007bff;
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      font-size: 1em;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    .btn:hover {
+      background-color: #0056b3;
+    }
+    @media (max-width: 768px) {
+      .member-img {
+        max-width: 90px;
+      }
+      .btn {
+        padding: 8px 16px;
+        font-size: 0.9em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>ハロプロ 現役メンバーソート</h1>
+  <div id="battle"></div>
+  <p id="prog"></p>
+  <ol id="rank"></ol>
+  
+  <script>
+    // 初期データ (ここは実際のメンバー名の JSON 配列に置き換え)
+    const initialMembers = ["上國料萌衣", "上村麗菜", "下井谷幸穂", "中山夏月姫", "井上春華", "井上玲音", "伊勢鈴蘭", "入江里咲", "八木栞", "前田こころ", "北原もも", "北川莉央", "吉田姫杷", "土居楓奏", "小林萌花", "小田さくら", "小野瑞歩", "小野田紗栞", "小野田華凜", "山﨑愛生", "岡村ほまれ", "岡村美波", "島倉りか", "島川波菜", "川名凜", "川嶋美楓", "工藤由愛", "平井美葉", "平山遊季", "広本瑠璃", "弓桁朱琴", "後藤花", "斉藤円香", "有澤一華", "村田結生", "村越彩菜", "松原ユリヤ", "松本わかな", "松永里愛", "植村葉純", "横山玲奈", "橋田歩果", "橋迫鈴", "櫻井梨央", "段原瑠々", "江口紗耶", "江端妃咲", "河西結心", "清野桃々姫", "為永幸音", "牧野真莉愛", "生田衣梨奈", "相馬優芽", "石井泉羽", "石山咲良", "福田真琳", "秋山眞緒", "窪田七海", "筒井澪心", "米村姫良々", "羽賀朱音", "西田汐里", "西﨑美空", "谷本安美", "豫風瑠乃", "遠藤彩加里", "里吉うたの", "野中美希", "高瀬くるみ"];
+    let participants = [...initialMembers];  // 現在の参加者
+    let stage = "";  // "mainTournament", "mainDraw", "losersTournament", "losersDraw", "league"
+    let pairs = [];   // 対戦ペア配列
+    let idx = 0;      // 現在の試合番号
+
+    // メイントーナメント用
+    let mainWinners = [];
+    let mainLosers = [];
+    let mainDrawPool = [];
+    // セカンドトーナメント用
+    let losersParticipants = [];
+    let losersWinners = [];
+    let losersDrawPool = [];
+    // リーグ戦の得点表
+    let scores = {};
+    // 各サイクルで除外された選手を記録する配列 (各要素は { name: 選手名, cycle: 数値 })
+    let eliminatedRanking = [];
+    // サイクル番号（大きいほど直近に除外された選手）
+    let cycleCounter = 0;
+
+    // 配列のシャッフル (Fisher–Yates アルゴリズム)
+    function shuffle(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        let j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+    }
+
+    // 表示更新用ユーティリティ
+    function updateProg(text) {
+      document.getElementById("prog").innerText = text;
+    }
+    function updateBattle(htmlContent) {
+      document.getElementById("battle").innerHTML = htmlContent;
+    }
+
+    // 最終順位表示：リーグ戦終了後は、リーグ戦の得点表と eliminatedRanking を
+    // 得点順＋除外された順（サイクル番号の昇順）で表示する
+    function updateRank() {
+      let el = document.getElementById("rank");
+      let ranking = [];
+      if (stage === "league" && idx >= pairs.length) {
+        let leagueRank = [];
+        for (let m in scores) {
+          leagueRank.push({ name: m, score: scores[m] });
+        }
+        leagueRank.sort((a, b) => b.score - a.score);
+        let eliminatedRank = eliminatedRanking.slice().sort((a, b) => a.cycle - b.cycle);
+        ranking = leagueRank.concat(eliminatedRank);
+      } else {
+        for (let m in scores) {
+          ranking.push({ name: m, score: scores[m] });
+        }
+        ranking.sort((a, b) => b.score - a.score);
+      }
+      let htmlContent = "";
+      for (let i = 0; i < ranking.length; i++) {
+        let rankPos = i + 1;
+        let entry = ranking[i];
+        if (entry.score !== undefined) {
+          htmlContent += `<li>${rankPos}位: ${entry.name} (${entry.score}pt)</li>`;
+        } else {
+          htmlContent += `<li>${rankPos}位: ${entry.name} (eliminated)</li>`;
+        }
+      }
+      el.innerHTML = htmlContent;
+    }
+
+    // 【メイントーナメント】
+    function startMainTournament() {
+      stage = "mainTournament";
+      mainWinners = [];
+      mainLosers = [];
+      mainDrawPool = [];
+      updateProg("メイントーナメント開始");
+      pairs = [];
+      shuffle(participants);
+      for (let i = 0; i < participants.length; i += 2) {
+        if (i + 1 < participants.length) {
+          pairs.push([participants[i], participants[i+1]]);
+        } else {
+          mainWinners.push(participants[i]);
+        }
+      }
+      shuffle(pairs);
+      idx = 0;
+      nextMainMatch();
+    }
+
+    function nextMainMatch() {
+      if (idx < pairs.length) {
+        let [a, b] = pairs[idx];
+        updateProg(`メイントーナメント: 試合 ${idx+1}/${pairs.length}`);
+        updateBattle(
+          `<div class="battle-container">
+             <figure class="member">
+               <img src="images/${a}.jpg" alt="${a}" class="member-img" onclick='voteMain("${a}", "${b}", "${a}")'>
+               <figcaption class="member-name">${a}</figcaption>
+             </figure>
+             <figure class="member">
+               <img src="images/${b}.jpg" alt="${b}" class="member-img" onclick='voteMain("${a}", "${b}", "${b}")'>
+               <figcaption class="member-name">${b}</figcaption>
+             </figure>
+           </div>
+           <div style="margin-top: 10px;">
+             <button class="btn" onclick='drawMain("${a}", "${b}")'>引き分け</button>
+           </div>`
+        );
+      } else {
+        if (mainDrawPool.length > 0) {
+          let drawn = mainDrawPool.slice();
+          mainDrawPool = [];
+          stage = "mainDraw";
+          pairs = [];
+          shuffle(drawn);
+          for (let i = 0; i < drawn.length; i += 2) {
+            if (i + 1 < drawn.length) {
+              pairs.push([drawn[i], drawn[i+1]]);
+            } else {
+              mainWinners.push(drawn[i]);
+            }
+          }
+          shuffle(pairs);
+          idx = 0;
+          nextMainMatch();
+        } else {
+          startLosersTournament();
+        }
+      }
+    }
+
+    function voteMain(a, b, winner) {
+      if (stage === "mainTournament" || stage === "mainDraw") {
+        mainWinners.push(winner);
+        if (winner === a) {
+          mainLosers.push(b);
+        } else {
+          mainLosers.push(a);
+        }
+        idx++;
+        nextMainMatch();
+      }
+    }
+
+    function drawMain(a, b) {
+      if (stage === "mainTournament" || stage === "mainDraw") {
+        mainDrawPool.push(a);
+        mainDrawPool.push(b);
+        idx++;
+        nextMainMatch();
+      }
+    }
+
+    // 【セカンドトーナメント】
+    function startLosersTournament() {
+      stage = "losersTournament";
+      losersParticipants = mainLosers.slice();
+      losersWinners = [];
+      losersDrawPool = [];
+      updateProg("セカンドトーナメント開始");
+      if (losersParticipants.length === 0) {
+        newCycle();
+        return;
+      }
+      pairs = [];
+      shuffle(losersParticipants);
+      for (let i = 0; i < losersParticipants.length; i += 2) {
+        if (i + 1 < losersParticipants.length) {
+          pairs.push([losersParticipants[i], losersParticipants[i+1]]);
+        } else {
+          losersWinners.push(losersParticipants[i]);
+        }
+      }
+      shuffle(pairs);
+      idx = 0;
+      nextLosersMatch();
+    }
+
+    function nextLosersMatch() {
+      if (idx < pairs.length) {
+        let [a, b] = pairs[idx];
+        updateProg(`セカンドトーナメント:  ${idx+1}/${pairs.length}`);
+        updateBattle(
+          `<div class="battle-container">
+             <figure class="member">
+               <img src="images/${a}.jpg" alt="${a}" class="member-img" onclick='voteLosers("${a}", "${b}", "${a}")'>
+               <figcaption class="member-name">${a}</figcaption>
+             </figure>
+             <figure class="member">
+               <img src="images/${b}.jpg" alt="${b}" class="member-img" onclick='voteLosers("${a}", "${b}", "${b}")'>
+               <figcaption class="member-name">${b}</figcaption>
+             </figure>
+           </div>
+           <div style="margin-top: 10px;">
+             <button class="btn" onclick='drawLosers("${a}", "${b}")'>引き分け</button>
+           </div>`
+        );
+      } else {
+        if (losersDrawPool.length > 0) {
+          let drawn = losersDrawPool.slice();
+          losersDrawPool = [];
+          stage = "losersDraw";
+          pairs = [];
+          shuffle(drawn);
+          for (let i = 0; i < drawn.length; i += 2) {
+            if (i + 1 < drawn.length) {
+              pairs.push([drawn[i], drawn[i+1]]);
+            } else {
+              losersWinners.push(drawn[i]);
+            }
+          }
+          shuffle(pairs);
+          idx = 0;
+          nextLosersMatch();
+        } else {
+          let revivalCount = Math.max(1, Math.floor(losersParticipants.length * 0.1));
+          let revived = losersWinners.slice(0, revivalCount);
+          let eliminatedThisCycle = losersParticipants.filter(p => revived.indexOf(p) === -1);
+          eliminatedThisCycle.forEach(function(p) {
+            eliminatedRanking.push({ name: p, cycle: cycleCounter });
+          });
+          cycleCounter++;
+          participants = mainWinners.concat(revived);
+          newCycle();
+        }
+      }
+    }
+
+    function voteLosers(a, b, winner) {
+      if (stage === "losersTournament" || stage === "losersDraw") {
+        losersWinners.push(winner);
+        idx++;
+        nextLosersMatch();
+      }
+    }
+
+    function drawLosers(a, b) {
+      if (stage === "losersTournament" || stage === "losersDraw") {
+        losersDrawPool.push(a);
+        losersDrawPool.push(b);
+        idx++;
+        nextLosersMatch();
+      }
+    }
+
+    function newCycle() {
+      if (participants.length > 13) {
+        updateProg("次のサイクルへ");
+        startMainTournament();
+      } else {
+        if (participants.length < 13) {
+          let needed = 13 - participants.length;
+          let sortedElim = eliminatedRanking.slice().sort((a, b) => b.cycle - a.cycle);
+          let toRevive = sortedElim.slice(0, needed).map(x => x.name);
+          participants = participants.concat(toRevive);
+          eliminatedRanking = eliminatedRanking.filter(x => !toRevive.includes(x.name));
+        }
+        startLeague();
+      }
+    }
+
+    // 【リーグ戦】
+    function startLeague() {
+      stage = "league";
+      updateProg("リーグ戦開始");
+      participants = participants.slice(0, 13);
+      for (let m of participants) {
+        scores[m] = 0;
+      }
+      pairs = [];
+      for (let i = 0; i < participants.length; i++) {
+        for (let j = i + 1; j < participants.length; j++) {
+          pairs.push([participants[i], participants[j]]);
+        }
+      }
+      shuffle(pairs);
+      idx = 0;
+      nextLeagueMatch();
+    }
+
+    function nextLeagueMatch() {
+      if (idx < pairs.length) {
+        let [a, b] = pairs[idx];
+        updateProg(`リーグ戦: 試合 ${idx+1}/${pairs.length}`);
+        let options = [];
+        options.push(`<figure class="member">
+                         <img src="images/${a}.jpg" alt="${a}" class="member-img" onclick='voteLeague("${a}", "${b}", "${a}")'>
+                         <figcaption class="member-name">${a}</figcaption>
+                       </figure>`);
+        options.push(`<figure class="member">
+                         <img src="images/${b}.jpg" alt="${b}" class="member-img" onclick='voteLeague("${a}", "${b}", "${b}")'>
+                         <figcaption class="member-name">${b}</figcaption>
+                       </figure>`);
+        shuffle(options);
+        updateBattle(`<div class="battle-container">${options.join("")}</div>`);
+      } else {
+        updateProg("リーグ戦終了");
+        updateBattle("");
+        updateRank();
+      }
+    }
+
+    function voteLeague(a, b, winner) {
+      scores[winner]++;
+      idx++;
+      updateRank();
+      nextLeagueMatch();
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+      updateRank();
+      startMainTournament();
+    });
+  </script>
+</body>
+</html>
