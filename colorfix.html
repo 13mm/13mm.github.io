@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RGB Brightness and Saturation Adjustment</title>
+    <style>
+        .slider-container {
+            margin: 20px 0;
+        }
+        .slider-label {
+            display: block;
+            margin-bottom: 10px;
+        }
+        .slider {
+            width: 80%;
+        }
+        .color-display {
+            width: 100%;
+            max-width: 500px;
+            margin: 20px auto;
+            border: 1px solid #ccc;
+        }
+        .value-display {
+            margin-left: 10px;
+        }
+        .reset-button {
+            display: block;
+            margin: 20px auto;
+            padding: 10px 20px;
+            background-color: #0078D7;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>RGB 輝度とゲインの調整</h1>
+
+    <input type="file" id="imageLoader" name="imageLoader"/>
+    <canvas id="imageCanvas" class="color-display"></canvas>
+
+    <div class="slider-container">
+        <label class="slider-label" for="gainR">Red Gain:</label>
+        <input type="range" class="slider" id="gainR" name="gainR" min="0" max="255" value="128">
+        <span class="value-display" id="gainR-value">128</span>
+    </div>
+
+    <div class="slider-container">
+        <label class="slider-label" for="gainG">Green Gain:</label>
+        <input type="range" class="slider" id="gainG" name="gainG" min="0" max="255" value="128">
+        <span class="value-display" id="gainG-value">128</span>
+    </div>
+
+    <div class="slider-container">
+        <label class="slider-label" for="gainB">Blue Gain:</label>
+        <input type="range" class="slider" id="gainB" name="gainB" min="0" max="255" value="128">
+        <span class="value-display" id="gainB-value">128</span>
+    </div>
+
+    <div class="slider-container">
+        <label class="slider-label" for="brightnessR">Red Brightness (Offset):</label>
+        <input type="range" class="slider" id="brightnessR" name="brightnessR" min="0" max="1023" value="512">
+        <span class="value-display" id="brightnessR-value">512</span>
+    </div>
+
+    <div class="slider-container">
+        <label class="slider-label" for="brightnessG">Green Brightness (Offset):</label>
+        <input type="range" class="slider" id="brightnessG" name="brightnessG" min="0" max="1023" value="512">
+        <span class="value-display" id="brightnessG-value">512</span>
+    </div>
+
+    <div class="slider-container">
+        <label class="slider-label" for="brightnessB">Blue Brightness (Offset):</label>
+        <input type="range" class="slider" id="brightnessB" name="brightnessB" min="0" max="1023" value="512">
+        <span class="value-display" id="brightnessB-value">512</span>
+    </div>
+
+    <button class="reset-button" id="resetButton">リセット</button>
+
+    <script>
+        const imageLoader = document.getElementById('imageLoader');
+        const canvas = document.getElementById('imageCanvas');
+        const context = canvas.getContext('2d');
+        const resetButton = document.getElementById('resetButton');
+
+        let originalImage = null;
+
+        imageLoader.addEventListener('change', handleImage, false);
+        resetButton.addEventListener('click', resetImage);
+
+        function handleImage(e) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    context.drawImage(img, 0, 0);
+                    originalImage = img;
+                    updateImage(); // 初期表示のために呼び出し
+                }
+                img.src = event.target.result;
+            }
+            reader.readAsDataURL(e.target.files[0]);
+        }
+
+        function updateImage() {
+            if (!originalImage) return;
+
+            canvas.width = originalImage.width;
+            canvas.height = originalImage.height;
+            context.drawImage(originalImage, 0, 0);
+            let imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+            let data = imageData.data;
+
+            const gainR = parseFloat(document.getElementById('gainR').value);
+            const gainG = parseFloat(document.getElementById('gainG').value);
+            const gainB = parseFloat(document.getElementById('gainB').value);
+            const brightnessR = parseFloat(document.getElementById('brightnessR').value) - 512;
+            const brightnessG = parseFloat(document.getElementById('brightnessG').value) - 512;
+            const brightnessB = parseFloat(document.getElementById('brightnessB').value) - 512;
+
+            for (let i = 0; i < data.length; i += 4) {
+                data[i] = Math.min(255, Math.max(0, data[i] * gainR / 128 + brightnessR * 255 / 512));
+                data[i + 1] = Math.min(255, Math.max(0, data[i + 1] * gainG / 128 + brightnessG * 255 / 512));
+                data[i + 2] = Math.min(255, Math.max(0, data[i + 2] * gainB / 128 + brightnessB * 255 / 512));
+            }
+
+            context.putImageData(imageData, 0, 0);
+
+            // スライダーの値を表示
+            document.getElementById('gainR-value').textContent = gainR;
+            document.getElementById('gainG-value').textContent = gainG;
+            document.getElementById('gainB-value').textContent = gainB;
+            document.getElementById('brightnessR-value').textContent = brightnessR + 512;
+            document.getElementById('brightnessG-value').textContent = brightnessG + 512;
+            document.getElementById('brightnessB-value').textContent = brightnessB + 512;
+        }
+
+        function resetImage() {
+            if (!originalImage) return;
+
+            // スライダーを初期値に戻す
+            document.getElementById('gainR').value = 128;
+            document.getElementById('gainG').value = 128;
+            document.getElementById('gainB').value = 128;
+            document.getElementById('brightnessR').value = 512;
+            document.getElementById('brightnessG').value = 512;
+            document.getElementById('brightnessB').value = 512;
+
+            updateImage();
+        }
+
+        document.querySelectorAll('input[type="range"]').forEach(slider => {
+            slider.addEventListener('input', updateImage);
+        });
+    </script>
+</body>
+</html>
