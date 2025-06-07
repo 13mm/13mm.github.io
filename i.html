@@ -8,78 +8,96 @@
   <style>
     body { font-family: sans-serif; margin: 40px; }
     canvas { max-width: 1000px; }
+    #error { color: red; }
   </style>
 </head>
 <body>
   <h2>Sovereign Risk Indicators (FRED Data Only)</h2>
   <canvas id="chart"></canvas>
+  <pre id="error"></pre>
   <script>
     const API_KEY = 'cfa73f0407d4cc7159dfc10b1a7f99b4'; // ← FRED APIキーを挿入
     // 使用するFREDシリーズ
     const seriesIds = {
       debtPctGDP: 'GFDEGDQ188S',    // 連邦債務対GDP（四半期）
-      nominal10y: 'DGS10',           // 10年国債利回り（名目）
-      cpi: 'CPIAUCSL'                // 消費者物価指数（CPI）
+      nominal10y: 'DGS10',           // 10年国債利回り（名目、月次）
+      cpi: 'CPIAUCSL'                // 消費者物価指数（CPI、月次）
     };
 
     async function fetchSeries(id) {
-      const url = 'https://api.stlouisfed.org/fred/series/observations';
-      const res = await axios.get(url, {
-        params: {
-          series_id: id,
-          api_key: API_KEY,
-          file_type: 'json',
-          observation_start: '2000-01-01',
-          frequency: 'm'
-        }
-      });
-      return res.data.observations
-        .map(o => ({ date: o.date, value: parseFloat(o.value) }))
-        .filter(d => !isNaN(d.value));
+      try {
+        const url = 'https://api.stlouisfed.org/fred/series/observations';
+        const freq = id === seriesIds.debtPctGDP ? 'q' : 'm';
+        const res = await axios.get(url, {
+          params: {
+            series_id: id,
+            api_key: API_KEY,
+            file_type: 'json',
+            observation_start: '2000-01-01',
+            frequency: freq
+          }
+        });
+        console.log(`Fetched ${id}:`, res.data.observations.length, 'points');
+        return res.data.observations
+          .map(o => ({ date: o.date, value: parseFloat(o.value) }))
+          .filter(d => !isNaN(d.value));
+      } catch (err) {
+        document.getElementById('error').textContent = `Error fetching ${id}: ${err}`;
+        return [];
+      }
+    }
+
+    function adjustMonths(date, offset) {
+      const [y, m] = date.split('-');
+      let year = parseInt(y), month = parseInt(m) + offset;
+      while (month < 1) { month += 12; year -= 1; }
+      while (month > 12) { month -= 12; year += 1; }
+      // 結果を quarterly は月始め、monthly は日付維持
+      return id === seriesIds.debtPctGDP
+        ? `${year.toString().padStart(4,'0')}-${month.toString().padStart(2,'0')}-01`
+        : `${year.toString().padStart(4,'0')}-${month.toString().padStart(2,'0')}-${date.split('-')[2]}`;
     }
 
     async function main() {
+      // データ取得
       const [debt, nom, cpi] = await Promise.all([
         fetchSeries(seriesIds.debtPctGDP),
         fetchSeries(seriesIds.nominal10y),
         fetchSeries(seriesIds.cpi)
       ]);
+      if (!debt.length || !nom.length || !cpi.length) return;
 
-      // 年率CPI変化率
-      const inflation = cpi.map((d, i) => {
+      // CPI年率変化率（月次→前年同月比）
+      const inflation = cpi.map(d => {
+        const prevDate = `${d.date.split('-')[0]}-${d.date.split('-')[1]}-01`;
         const prev = cpi.find(x => x.date === adjustMonths(d.date, -12));
         return prev ? { date: d.date, value: ((d.value - prev.value) / prev.value) * 100 } : null;
       }).filter(d => d);
+      console.log('Inflation points:', inflation.length);
 
-      // 実質金利 = 名目 - インフレ
+      // 実質金利 = 名目金利 - インフレ
       const realRate = nom.map(d => {
         const inf = inflation.find(x => x.date === d.date);
         return inf ? { date: d.date, value: d.value - inf.value } : null;
       }).filter(d => d);
+      console.log('Real rate points:', realRate.length);
 
-      // 共通の日付でフィルタ
+      // 共通日付で同期
       const dates = debt.map(d => d.date).filter(date => realRate.some(r => r.date === date));
       const debtData = dates.map(date => debt.find(d => d.date === date).value);
       const realData = dates.map(date => realRate.find(r => r.date === date).value);
 
+      console.log('Final sync points:', dates.length);
+
+      // チャート描画
       const ctx = document.getElementById('chart').getContext('2d');
       new Chart(ctx, {
         type: 'line',
         data: {
           labels: dates,
           datasets: [
-            {
-              label: 'Federal Debt % of GDP',
-              data: debtData,
-              borderColor: 'blue',
-              yAxisID: 'y'
-            },
-            {
-              label: 'Real 10y Yield (%)',
-              data: realData,
-              borderColor: 'red',
-              yAxisID: 'y2'
-            }
+            { label: 'Federal Debt % of GDP', data: debtData, borderColor: 'blue', yAxisID: 'y' },
+            { label: 'Real 10y Yield (%)', data: realData, borderColor: 'red', yAxisID: 'y2' }
           ]
         },
         options: {
@@ -94,16 +112,8 @@
       });
     }
 
-    function adjustMonths(date, offset) {
-      const [y, m] = date.split('-');
-      let year = parseInt(y), month = parseInt(m) + offset;
-      while (month < 1) { month += 12; year -= 1; }
-      while (month > 12) { month -= 12; year += 1; }
-      return `${year.toString().padStart(4,'0')}-${month.toString().padStart(2,'0')}`;
-    }
-
-    // ローカルサーバで実行してください (http://localhost:8000など)
-    main().catch(err => console.error(err));
+    // 実行
+    main();
   </script>
 </body>
 </html>
