@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Sovereign Risk Chart - FRED Only (with CORS Proxy)</title>
+  <title>Sovereign Risk Chart - Composite Risk Index</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
   <style>
@@ -12,47 +12,43 @@
   </style>
 </head>
 <body>
-  <h2>Sovereign Risk Indicators (FRED Data Only)</h2>
+  <h2>Sovereign Risk Indicators &amp; Composite Risk Index</h2>
   <canvas id="chart"></canvas>
   <pre id="error"></pre>
   <script>
-    const API_KEY = 'cfa73f0407d4cc7159dfc10b1a7f99b4'; // ← FRED APIキーを挿入
-    // CORSを回避するAllOriginsプロキシ
+    const API_KEY = 'cfa73f0407d4cc7159dfc10b1a7f99b4';
     const proxy = 'https://api.allorigins.win/raw?url=';
-    // 使用するFREDシリーズ
     const seriesIds = {
-      debtPctGDP: 'GFDEGDQ188S',    // 連邦債務対GDP（四半期）
-      nominal10y: 'DGS10',           // 10年国債利回り（名目、月次）
-      cpi: 'CPIAUCSL'                // 消費者物価指数（CPI、月次）
+      debtPctGDP: 'GFDEGDQ188S',    // 四半期
+      nominal10y: 'DGS10',           // 月次
+      cpi: 'CPIAUCSL'                // 月次
     };
+    const threshold = 0.7; // Composite risk threshold
 
     async function fetchSeries(id) {
       try {
         const freq = id === seriesIds.debtPctGDP ? 'q' : 'm';
-        const originalUrl = `https://api.stlouisfed.org/fred/series/observations?series_id=${id}&api_key=${API_KEY}&file_type=json&observation_start=2000-01-01&frequency=${freq}`;
-        const url = proxy + encodeURIComponent(originalUrl);
-        const res = await axios.get(url);
-        const data = res.data;
-        // AllOriginsは生JSONを返す
-        const obs = data.observations || data.observations;
-        console.log(`Fetched ${id}:`, obs.length, 'points');
-        return obs
-          .map(o => ({ date: o.date, value: parseFloat(o.value) }))
-          .filter(d => !isNaN(d.value));
+        const orig = `https://api.stlouisfed.org/fred/series/observations?series_id=${id}&api_key=${API_KEY}&file_type=json&observation_start=2000-01-01&frequency=${freq}`;
+        const res = await axios.get(proxy + encodeURIComponent(orig));
+        const obs = res.data.observations;
+        return obs.map(o => ({ date: o.date, value: parseFloat(o.value) })).filter(d => !isNaN(d.value));
       } catch (err) {
         document.getElementById('error').textContent += `Error fetching ${id}: ${err}\n`;
         return [];
       }
     }
-
-    function adjustMonths(date, offset) {
-      const [y, m, d] = date.split('-');
-      let year = parseInt(y), month = parseInt(m) + offset;
-      while (month < 1) { month += 12; year -= 1; }
-      while (month > 12) { month -= 12; year += 1; }
-      return `${year.toString().padStart(4,'0')}-${month.toString().padStart(2,'0')}-${d}`;
+    function normalize(arr) {
+      const vals = arr.map(d => d.value);
+      const min = Math.min(...vals);
+      const max = Math.max(...vals);
+      return arr.map(d => ({ date: d.date, value: (d.value - min) / (max - min) }));
     }
-
+    function normalizeInverse(arr) {
+      const vals = arr.map(d => d.value);
+      const min = Math.min(...vals);
+      const max = Math.max(...vals);
+      return arr.map(d => ({ date: d.date, value: (max - d.value) / (max - min) }));
+    }
     async function main() {
       const [debt, nom, cpi] = await Promise.all([
         fetchSeries(seriesIds.debtPctGDP),
@@ -60,47 +56,60 @@
         fetchSeries(seriesIds.cpi)
       ]);
       if (!debt.length || !nom.length || !cpi.length) return;
-
+      // Compute inflation YoY
       const inflation = cpi.map(d => {
-        const prevDate = adjustMonths(d.date, -12);
-        const prev = cpi.find(x => x.date === prevDate);
-        return prev ? { date: d.date, value: ((d.value - prev.value) / prev.value) * 100 } : null;
+        const prev = cpi.find(x => x.date === adjustMonths(d.date, -12));
+        return prev ? { date: d.date, value: (d.value - prev.value) / prev.value * 100 } : null;
       }).filter(d => d);
-      console.log('Inflation points:', inflation.length);
-
-      const realRate = nom.map(d => {
+      // Real yield
+      const real = nom.map(d => {
         const inf = inflation.find(x => x.date === d.date);
         return inf ? { date: d.date, value: d.value - inf.value } : null;
       }).filter(d => d);
-      console.log('Real rate points:', realRate.length);
-
-      const dates = debt.map(d => d.date).filter(date => realRate.some(r => r.date === date));
-      const debtData = dates.map(date => debt.find(d => d.date === date).value);
-      const realData = dates.map(date => realRate.find(r => r.date === date).value);
-      console.log('Final sync points:', dates.length);
-
+      // Sync dates
+      const dates = debt.map(d => d.date).filter(date => real.some(r => r.date === date));
+      const debtSync = debt.filter(d => dates.includes(d.date));
+      const realSync = real.filter(r => dates.includes(r.date));
+      // Normalize
+      const Dn = normalize(debtSync);
+      const Rn = normalizeInverse(realSync);
+      // Composite index
+      const comp = Dn.map((d,i) => ({ date: d.date, value: 0.5 * d.value + 0.5 * Rn[i].value }));
+      // Prepare data for chart
+      const labels = comp.map(d => d.date);
+      const debtData = Dn.map(d => d.value);
+      const realData = Rn.map(r => r.value);
+      const compData = comp.map(c => c.value);
+      const threshData = comp.map(_ => threshold);
+      // Draw chart
       const ctx = document.getElementById('chart').getContext('2d');
       new Chart(ctx, {
         type: 'line',
         data: {
-          labels: dates,
+          labels,
           datasets: [
-            { label: 'Federal Debt % of GDP', data: debtData, borderColor: 'blue', yAxisID: 'y' },
-            { label: 'Real 10y Yield (%)', data: realData, borderColor: 'red', yAxisID: 'y2' }
+            { label: 'Normalized Debt % GDP', data: debtData, borderColor: 'blue', fill: false, yAxisID: 'y' },
+            { label: 'Normalized Inverse Real Yield', data: realData, borderColor: 'red', fill: false, yAxisID: 'y' },
+            { label: 'Composite Risk Index', data: compData, borderColor: 'purple', fill: false, yAxisID: 'y2' },
+            { label: 'Risk Threshold', data: threshData, borderColor: 'black', borderDash: [5,5], fill: false, yAxisID: 'y2' }
           ]
         },
         options: {
           responsive: true,
           interaction: { mode: 'index', intersect: false },
-          plugins: { title: { display: true, text: 'Sovereign Risk Indicators' } },
+          plugins: { title: { display: true, text: 'Composite Sovereign Risk Index with Threshold' } },
           scales: {
-            y: { type: 'linear', position: 'left', title: { display: true, text: 'Debt % of GDP' } },
-            y2: { type: 'linear', position: 'right', title: { display: true, text: 'Real Yield (%)' }, grid: { drawOnChartArea: false } }
+            y: { type: 'linear', position: 'left', title: { display: true, text: 'Normalized Debt/Real' }, min: 0, max: 1 },
+            y2: { type: 'linear', position: 'right', title: { display: true, text: 'Composite & Threshold' }, min: 0, max: 1, grid: { drawOnChartArea: false } }
           }
         }
       });
     }
-
+    function adjustMonths(date, offset) {
+      const [y,m,d] = date.split('-'); let year=parseInt(y), month=parseInt(m)+offset;
+      while(month<1){month+=12;year--;} while(month>12){month-=12;year++;}
+      return `${year}-${String(month).padStart(2,'0')}-${d}`;
+    }
     main();
   </script>
 </body>
