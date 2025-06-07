@@ -1,115 +1,192 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>Sovereign Risk Chart - Interactive Controls</title>
+  <meta charset="UTF-8" />
+  <title>米国債務リスクチャート（期間指定可能）</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
   <style>
-    body { font-family: sans-serif; margin: 40px; }
-    #controls { margin-bottom: 20px; }
-    canvas { max-width: 1000px; }
-    #error { color: red; white-space: pre-wrap; }
-    label { margin-right: 15px; }
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    label, input, button { font-size: 16px; margin-right: 10px; }
+    #chart-container { width: 100%; max-width: 900px; margin-top: 30px; }
   </style>
 </head>
 <body>
-  <h2>Sovereign Risk Indicators &amp; Composite Risk Index (Last 50 Years)</h2>
-  <div id="controls">
-    <label><input type="checkbox" id="toggleDebt" checked> Normalized Debt/GDP</label>
-    <label><input type="checkbox" id="toggleReal" checked> Normalized Inverse Real Yield</label>
-    <label><input type="checkbox" id="toggleComp" checked> Composite Risk Index</label>
-    <label>Threshold: <input type="number" id="thresholdInput" value="0.7" step="0.05" min="0" max="1"></label>
-    <button id="updateButton">Update Chart</button>
-  </div>
-  <canvas id="chart"></canvas>
-  <pre id="error"></pre>
-  <script>
-    const API_KEY = 'cfa73f0407d4cc7159dfc10b1a7f99b4';
-    const proxy = 'https://api.allorigins.win/raw?url=';
-    const seriesIds = {
-      debtPctGDP: 'GFDEGDQ188S', // 四半期
-      nominal10y: 'DGS10',        // 月次
-      cpi: 'CPIAUCSL'             // 月次
-    };
-    const startDate = '1975-01-01';
+  <h2>米国債務リスクチャート</h2>
 
-    async function fetchSeries(id) {
-      const freq = id === seriesIds.debtPctGDP ? 'q' : 'm';
-      const orig = `https://api.stlouisfed.org/fred/series/observations?series_id=${id}&api_key=${API_KEY}&file_type=json&observation_start=${startDate}&frequency=${freq}`;
+  <label for="yearsInput">表示期間（年）:</label>
+  <input type="number" id="yearsInput" value="10" min="1" max="50" step="1" />
+  <button id="updateBtn">チャート更新</button>
+
+  <div id="chart-container">
+    <canvas id="riskChart"></canvas>
+  </div>
+
+  <script>
+    // APIキーとエンドポイントの設定（FREDの例）
+    const API_KEY = 'YOUR_FRED_API_KEY_HERE';
+    // 例：米国連邦政府総債務（データID: FYGFDPUN）
+    const SERIES1_ID = 'FYGFDPUN';
+    // 例：実質短期利回り（データID: DGS10）
+    const SERIES2_ID = 'DGS10';
+
+    let rawDates = [];  // 全期間の日付配列
+    let rawSeries1 = []; // 全期間データ1（債務）
+    let rawSeries2 = []; // 全期間データ2（実質利回り）
+    let chart;  // Chart.jsインスタンス
+
+    // FREDからデータ取得用関数（async/await）
+    async function fetchFredSeries(seriesId) {
+      const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${seriesId}&api_key=${API_KEY}&file_type=json`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Failed to fetch ${seriesId}`);
+      const json = await res.json();
+      return json.observations.map(o => ({
+        date: o.date,
+        value: o.value === '.' ? null : parseFloat(o.value)
+      })).filter(o => o.value !== null);
+    }
+
+    // 全データを取得してグローバル変数にセット
+    async function loadData() {
       try {
-        const res = await axios.get(proxy + encodeURIComponent(orig));
-        return res.data.observations
-          .map(o => ({ date: o.date, value: parseFloat(o.value) }))
-          .filter(d => !isNaN(d.value));
-      } catch (err) {
-        document.getElementById('error').textContent += `Error fetching ${id}: ${err}\n`;
-        return [];
+        const [data1, data2] = await Promise.all([
+          fetchFredSeries(SERIES1_ID),
+          fetchFredSeries(SERIES2_ID)
+        ]);
+
+        // 日付の共通部分だけ残すために共通日付を抽出
+        const dates1 = data1.map(d => d.date);
+        const dates2 = data2.map(d => d.date);
+        const commonDates = dates1.filter(d => dates2.includes(d)).sort();
+
+        rawDates = commonDates;
+        rawSeries1 = commonDates.map(d => data1.find(x => x.date === d).value);
+        rawSeries2 = commonDates.map(d => data2.find(x => x.date === d).value);
+
+      } catch (e) {
+        alert('データ取得に失敗しました: ' + e.message);
       }
     }
-    function normalize(arr) {
-      const vals = arr.map(d => d.value);
-      const min = Math.min(...vals), max = Math.max(...vals);
-      return arr.map(d => ({ date: d.date, value: (d.value - min) / (max - min) }));
-    }
-    function normalizeInverse(arr) {
-      const vals = arr.map(d => d.value);
-      const min = Math.min(...vals), max = Math.max(...vals);
-      return arr.map(d => ({ date: d.date, value: (max - d.value) / (max - min) }));
-    }
-    function adjustMonths(date, offset) {
-      const [y,m,d] = date.split('-');
-      let year = parseInt(y), month = parseInt(m) + offset;
-      while(month<1){month+=12;year--;} while(month>12){month-=12;year++;}
-      return `${year}-${String(month).padStart(2,'0')}-${d}`;
+
+    // 指定した年数分のデータに絞り込んでチャートを更新
+    function updateChart(years) {
+      if (!rawDates.length) return;
+
+      const cutoff = new Date();
+      cutoff.setFullYear(cutoff.getFullYear() - years);
+
+      // cutoff以降のデータだけ抽出
+      const filteredIndices = rawDates.reduce((acc, d, i) => {
+        if (new Date(d) >= cutoff) acc.push(i);
+        return acc;
+      }, []);
+
+      const filteredDates = filteredIndices.map(i => rawDates[i]);
+      const filteredSeries1 = filteredIndices.map(i => rawSeries1[i]);
+      const filteredSeries2 = filteredIndices.map(i => rawSeries2[i]);
+
+      // Chart.jsの更新
+      chart.data.labels = filteredDates;
+      chart.data.datasets[0].data = filteredSeries1;
+      chart.data.datasets[1].data = filteredSeries2;
+      chart.update();
     }
 
-    async function prepareData() {
-      const [debt, nom, cpi] = await Promise.all([
-        fetchSeries(seriesIds.debtPctGDP),
-        fetchSeries(seriesIds.nominal10y),
-        fetchSeries(seriesIds.cpi)
-      ]);
-      // Inflation YoY
-      const inflation = cpi.map(d => {
-        const prev = cpi.find(x => x.date === adjustMonths(d.date, -12));
-        return prev ? { date: d.date, value: (d.value - prev.value)/prev.value * 100 } : null;
-      }).filter(d => d);
-      // Real yield
-      const real = nom.map(d => {
-        const inf = inflation.find(x => x.date === d.date);
-        return inf ? { date: d.date, value: d.value - inf.value } : null;
-      }).filter(d => d);
-      // Sync dates
-      const dates = debt.map(d => d.date).filter(date => real.some(r => r.date===date));
-      const debtSync = debt.filter(d=>dates.includes(d.date));
-      const realSync = real.filter(r=>dates.includes(r.date));
-      // Normalize
-      const Dn = normalize(debtSync), Rn = normalizeInverse(realSync);
-      // Composite
-      const comp = Dn.map((d,i)=>({ date:d.date, value:0.5*d.value + 0.5*Rn[i].value }));
-      return { labels: comp.map(d=>d.date), debt: Dn.map(d=>d.value), real: Rn.map(r=>r.value), comp: comp.map(c=>c.value) };
-    }
-
-    async function drawChart() {
-      const data = await prepareData();
-      const threshold = parseFloat(document.getElementById('thresholdInput').value);
-      const ctx = document.getElementById('chart').getContext('2d');
-      if(window.myChart) window.myChart.destroy();
-      const datasets = [];
-      if(document.getElementById('toggleDebt').checked) datasets.push({ label:'Normalized Debt/GDP', data:data.debt, borderColor:'blue', fill:false, yAxisID:'y' });
-      if(document.getElementById('toggleReal').checked) datasets.push({ label:'Normalized Inverse Real Yield', data:data.real, borderColor:'red', fill:false, yAxisID:'y' });
-      if(document.getElementById('toggleComp').checked) datasets.push({ label:'Composite Risk Index', data:data.comp, borderColor:'purple', fill:false, yAxisID:'y2' });
-      // threshold line
-      if(document.getElementById('toggleComp').checked) datasets.push({ label:'Risk Threshold', data:data.comp.map(_=>threshold), borderColor:'black', borderDash:[5,5], fill:false, yAxisID:'y2' });
-      window.myChart = new Chart(ctx, {
-        type:'line', data:{ labels:data.labels, datasets },
-        options:{ responsive:true, interaction:{mode:'index',intersect:false}, plugins:{ title:{ display:true, text:'Composite Sovereign Risk Index (Last 50 Years)' } }, scales:{ y:{ type:'linear', position:'left', min:0, max:1 }, y2:{ type:'linear', position:'right', min:0, max:1, grid:{ drawOnChartArea:false } } }
+    // Chart.js初期化
+    function initChart() {
+      const ctx = document.getElementById('riskChart').getContext('2d');
+      chart = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: [], // 初期は空
+          datasets: [
+            {
+              label: '米国連邦政府総債務',
+              data: [],
+              borderColor: 'purple',
+              backgroundColor: 'transparent',
+              yAxisID: 'y1',
+              tension: 0.2
+            },
+            {
+              label: '実質利回り（%）',
+              data: [],
+              borderColor: 'black',
+              backgroundColor: 'transparent',
+              yAxisID: 'y2',
+              tension: 0.2
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          interaction: {
+            mode: 'index',
+            intersect: false,
+          },
+          stacked: false,
+          scales: {
+            y1: {
+              type: 'linear',
+              position: 'left',
+              title: {
+                display: true,
+                text: '債務額（単位）'
+              }
+            },
+            y2: {
+              type: 'linear',
+              position: 'right',
+              title: {
+                display: true,
+                text: '実質利回り（%）'
+              },
+              grid: {
+                drawOnChartArea: false,
+              }
+            },
+            x: {
+              title: {
+                display: true,
+                text: '日付'
+              },
+              ticks: {
+                maxRotation: 45,
+                minRotation: 45,
+                maxTicksLimit: 15,
+              }
+            }
+          },
+          plugins: {
+            legend: {
+              position: 'top',
+            },
+            tooltip: {
+              mode: 'index',
+              intersect: false,
+            }
+          }
+        }
       });
     }
 
-    document.getElementById('updateButton').addEventListener('click', drawChart);
-    drawChart();
+    // 初期処理
+    async function main() {
+      initChart();
+      await loadData();
+      updateChart(parseInt(document.getElementById('yearsInput').value));
+    }
+
+    document.getElementById('updateBtn').addEventListener('click', () => {
+      const years = parseInt(document.getElementById('yearsInput').value);
+      if (isNaN(years) || years < 1 || years > 50) {
+        alert('1〜50の年数を入力してください');
+        return;
+      }
+      updateChart(years);
+    });
+
+    main();
   </script>
 </body>
 </html>
