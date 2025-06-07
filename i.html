@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Sovereign Risk Chart - FRED Only</title>
+  <title>Sovereign Risk Chart - FRED Only (with CORS Proxy)</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
   <style>
     body { font-family: sans-serif; margin: 40px; }
     canvas { max-width: 1000px; }
-    #error { color: red; }
+    #error { color: red; white-space: pre-wrap; }
   </style>
 </head>
 <body>
@@ -17,6 +17,8 @@
   <pre id="error"></pre>
   <script>
     const API_KEY = 'cfa73f0407d4cc7159dfc10b1a7f99b4'; // ← FRED APIキーを挿入
+    // CORSを回避するAllOriginsプロキシ
+    const proxy = 'https://api.allorigins.win/raw?url=';
     // 使用するFREDシリーズ
     const seriesIds = {
       debtPctGDP: 'GFDEGDQ188S',    // 連邦債務対GDP（四半期）
@@ -26,40 +28,32 @@
 
     async function fetchSeries(id) {
       try {
-        const url = 'https://api.stlouisfed.org/fred/series/observations';
         const freq = id === seriesIds.debtPctGDP ? 'q' : 'm';
-        const res = await axios.get(url, {
-          params: {
-            series_id: id,
-            api_key: API_KEY,
-            file_type: 'json',
-            observation_start: '2000-01-01',
-            frequency: freq
-          }
-        });
-        console.log(`Fetched ${id}:`, res.data.observations.length, 'points');
-        return res.data.observations
+        const originalUrl = `https://api.stlouisfed.org/fred/series/observations?series_id=${id}&api_key=${API_KEY}&file_type=json&observation_start=2000-01-01&frequency=${freq}`;
+        const url = proxy + encodeURIComponent(originalUrl);
+        const res = await axios.get(url);
+        const data = res.data;
+        // AllOriginsは生JSONを返す
+        const obs = data.observations || data.observations;
+        console.log(`Fetched ${id}:`, obs.length, 'points');
+        return obs
           .map(o => ({ date: o.date, value: parseFloat(o.value) }))
           .filter(d => !isNaN(d.value));
       } catch (err) {
-        document.getElementById('error').textContent = `Error fetching ${id}: ${err}`;
+        document.getElementById('error').textContent += `Error fetching ${id}: ${err}\n`;
         return [];
       }
     }
 
     function adjustMonths(date, offset) {
-      const [y, m] = date.split('-');
+      const [y, m, d] = date.split('-');
       let year = parseInt(y), month = parseInt(m) + offset;
       while (month < 1) { month += 12; year -= 1; }
       while (month > 12) { month -= 12; year += 1; }
-      // 結果を quarterly は月始め、monthly は日付維持
-      return id === seriesIds.debtPctGDP
-        ? `${year.toString().padStart(4,'0')}-${month.toString().padStart(2,'0')}-01`
-        : `${year.toString().padStart(4,'0')}-${month.toString().padStart(2,'0')}-${date.split('-')[2]}`;
+      return `${year.toString().padStart(4,'0')}-${month.toString().padStart(2,'0')}-${d}`;
     }
 
     async function main() {
-      // データ取得
       const [debt, nom, cpi] = await Promise.all([
         fetchSeries(seriesIds.debtPctGDP),
         fetchSeries(seriesIds.nominal10y),
@@ -67,29 +61,24 @@
       ]);
       if (!debt.length || !nom.length || !cpi.length) return;
 
-      // CPI年率変化率（月次→前年同月比）
       const inflation = cpi.map(d => {
-        const prevDate = `${d.date.split('-')[0]}-${d.date.split('-')[1]}-01`;
-        const prev = cpi.find(x => x.date === adjustMonths(d.date, -12));
+        const prevDate = adjustMonths(d.date, -12);
+        const prev = cpi.find(x => x.date === prevDate);
         return prev ? { date: d.date, value: ((d.value - prev.value) / prev.value) * 100 } : null;
       }).filter(d => d);
       console.log('Inflation points:', inflation.length);
 
-      // 実質金利 = 名目金利 - インフレ
       const realRate = nom.map(d => {
         const inf = inflation.find(x => x.date === d.date);
         return inf ? { date: d.date, value: d.value - inf.value } : null;
       }).filter(d => d);
       console.log('Real rate points:', realRate.length);
 
-      // 共通日付で同期
       const dates = debt.map(d => d.date).filter(date => realRate.some(r => r.date === date));
       const debtData = dates.map(date => debt.find(d => d.date === date).value);
       const realData = dates.map(date => realRate.find(r => r.date === date).value);
-
       console.log('Final sync points:', dates.length);
 
-      // チャート描画
       const ctx = document.getElementById('chart').getContext('2d');
       new Chart(ctx, {
         type: 'line',
@@ -112,7 +101,6 @@
       });
     }
 
-    // 実行
     main();
   </script>
 </body>
