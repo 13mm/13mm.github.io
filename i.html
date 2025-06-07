@@ -2,36 +2,46 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Sovereign Risk Chart - Composite Risk Index</title>
+  <title>Sovereign Risk Chart - Interactive Controls</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
   <style>
     body { font-family: sans-serif; margin: 40px; }
+    #controls { margin-bottom: 20px; }
     canvas { max-width: 1000px; }
     #error { color: red; white-space: pre-wrap; }
+    label { margin-right: 15px; }
   </style>
 </head>
 <body>
-  <h2>Sovereign Risk Indicators &amp; Composite Risk Index</h2>
+  <h2>Sovereign Risk Indicators &amp; Composite Risk Index (Last 50 Years)</h2>
+  <div id="controls">
+    <label><input type="checkbox" id="toggleDebt" checked> Normalized Debt/GDP</label>
+    <label><input type="checkbox" id="toggleReal" checked> Normalized Inverse Real Yield</label>
+    <label><input type="checkbox" id="toggleComp" checked> Composite Risk Index</label>
+    <label>Threshold: <input type="number" id="thresholdInput" value="0.7" step="0.05" min="0" max="1"></label>
+    <button id="updateButton">Update Chart</button>
+  </div>
   <canvas id="chart"></canvas>
   <pre id="error"></pre>
   <script>
     const API_KEY = 'cfa73f0407d4cc7159dfc10b1a7f99b4';
     const proxy = 'https://api.allorigins.win/raw?url=';
     const seriesIds = {
-      debtPctGDP: 'GFDEGDQ188S',    // 四半期
-      nominal10y: 'DGS10',           // 月次
-      cpi: 'CPIAUCSL'                // 月次
+      debtPctGDP: 'GFDEGDQ188S', // 四半期
+      nominal10y: 'DGS10',        // 月次
+      cpi: 'CPIAUCSL'             // 月次
     };
-    const threshold = 0.7; // Composite risk threshold
+    const startDate = '1975-01-01';
 
     async function fetchSeries(id) {
+      const freq = id === seriesIds.debtPctGDP ? 'q' : 'm';
+      const orig = `https://api.stlouisfed.org/fred/series/observations?series_id=${id}&api_key=${API_KEY}&file_type=json&observation_start=${startDate}&frequency=${freq}`;
       try {
-        const freq = id === seriesIds.debtPctGDP ? 'q' : 'm';
-        const orig = `https://api.stlouisfed.org/fred/series/observations?series_id=${id}&api_key=${API_KEY}&file_type=json&observation_start=2000-01-01&frequency=${freq}`;
         const res = await axios.get(proxy + encodeURIComponent(orig));
-        const obs = res.data.observations;
-        return obs.map(o => ({ date: o.date, value: parseFloat(o.value) })).filter(d => !isNaN(d.value));
+        return res.data.observations
+          .map(o => ({ date: o.date, value: parseFloat(o.value) }))
+          .filter(d => !isNaN(d.value));
       } catch (err) {
         document.getElementById('error').textContent += `Error fetching ${id}: ${err}\n`;
         return [];
@@ -39,27 +49,31 @@
     }
     function normalize(arr) {
       const vals = arr.map(d => d.value);
-      const min = Math.min(...vals);
-      const max = Math.max(...vals);
+      const min = Math.min(...vals), max = Math.max(...vals);
       return arr.map(d => ({ date: d.date, value: (d.value - min) / (max - min) }));
     }
     function normalizeInverse(arr) {
       const vals = arr.map(d => d.value);
-      const min = Math.min(...vals);
-      const max = Math.max(...vals);
+      const min = Math.min(...vals), max = Math.max(...vals);
       return arr.map(d => ({ date: d.date, value: (max - d.value) / (max - min) }));
     }
-    async function main() {
+    function adjustMonths(date, offset) {
+      const [y,m,d] = date.split('-');
+      let year = parseInt(y), month = parseInt(m) + offset;
+      while(month<1){month+=12;year--;} while(month>12){month-=12;year++;}
+      return `${year}-${String(month).padStart(2,'0')}-${d}`;
+    }
+
+    async function prepareData() {
       const [debt, nom, cpi] = await Promise.all([
         fetchSeries(seriesIds.debtPctGDP),
         fetchSeries(seriesIds.nominal10y),
         fetchSeries(seriesIds.cpi)
       ]);
-      if (!debt.length || !nom.length || !cpi.length) return;
-      // Compute inflation YoY
+      // Inflation YoY
       const inflation = cpi.map(d => {
         const prev = cpi.find(x => x.date === adjustMonths(d.date, -12));
-        return prev ? { date: d.date, value: (d.value - prev.value) / prev.value * 100 } : null;
+        return prev ? { date: d.date, value: (d.value - prev.value)/prev.value * 100 } : null;
       }).filter(d => d);
       // Real yield
       const real = nom.map(d => {
@@ -67,50 +81,35 @@
         return inf ? { date: d.date, value: d.value - inf.value } : null;
       }).filter(d => d);
       // Sync dates
-      const dates = debt.map(d => d.date).filter(date => real.some(r => r.date === date));
-      const debtSync = debt.filter(d => dates.includes(d.date));
-      const realSync = real.filter(r => dates.includes(r.date));
+      const dates = debt.map(d => d.date).filter(date => real.some(r => r.date===date));
+      const debtSync = debt.filter(d=>dates.includes(d.date));
+      const realSync = real.filter(r=>dates.includes(r.date));
       // Normalize
-      const Dn = normalize(debtSync);
-      const Rn = normalizeInverse(realSync);
-      // Composite index
-      const comp = Dn.map((d,i) => ({ date: d.date, value: 0.5 * d.value + 0.5 * Rn[i].value }));
-      // Prepare data for chart
-      const labels = comp.map(d => d.date);
-      const debtData = Dn.map(d => d.value);
-      const realData = Rn.map(r => r.value);
-      const compData = comp.map(c => c.value);
-      const threshData = comp.map(_ => threshold);
-      // Draw chart
+      const Dn = normalize(debtSync), Rn = normalizeInverse(realSync);
+      // Composite
+      const comp = Dn.map((d,i)=>({ date:d.date, value:0.5*d.value + 0.5*Rn[i].value }));
+      return { labels: comp.map(d=>d.date), debt: Dn.map(d=>d.value), real: Rn.map(r=>r.value), comp: comp.map(c=>c.value) };
+    }
+
+    async function drawChart() {
+      const data = await prepareData();
+      const threshold = parseFloat(document.getElementById('thresholdInput').value);
       const ctx = document.getElementById('chart').getContext('2d');
-      new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels,
-          datasets: [
-            { label: 'Normalized Debt % GDP', data: debtData, borderColor: 'blue', fill: false, yAxisID: 'y' },
-            { label: 'Normalized Inverse Real Yield', data: realData, borderColor: 'red', fill: false, yAxisID: 'y' },
-            { label: 'Composite Risk Index', data: compData, borderColor: 'purple', fill: false, yAxisID: 'y2' },
-            { label: 'Risk Threshold', data: threshData, borderColor: 'black', borderDash: [5,5], fill: false, yAxisID: 'y2' }
-          ]
-        },
-        options: {
-          responsive: true,
-          interaction: { mode: 'index', intersect: false },
-          plugins: { title: { display: true, text: 'Composite Sovereign Risk Index with Threshold' } },
-          scales: {
-            y: { type: 'linear', position: 'left', title: { display: true, text: 'Normalized Debt/Real' }, min: 0, max: 1 },
-            y2: { type: 'linear', position: 'right', title: { display: true, text: 'Composite & Threshold' }, min: 0, max: 1, grid: { drawOnChartArea: false } }
-          }
-        }
+      if(window.myChart) window.myChart.destroy();
+      const datasets = [];
+      if(document.getElementById('toggleDebt').checked) datasets.push({ label:'Normalized Debt/GDP', data:data.debt, borderColor:'blue', fill:false, yAxisID:'y' });
+      if(document.getElementById('toggleReal').checked) datasets.push({ label:'Normalized Inverse Real Yield', data:data.real, borderColor:'red', fill:false, yAxisID:'y' });
+      if(document.getElementById('toggleComp').checked) datasets.push({ label:'Composite Risk Index', data:data.comp, borderColor:'purple', fill:false, yAxisID:'y2' });
+      // threshold line
+      if(document.getElementById('toggleComp').checked) datasets.push({ label:'Risk Threshold', data:data.comp.map(_=>threshold), borderColor:'black', borderDash:[5,5], fill:false, yAxisID:'y2' });
+      window.myChart = new Chart(ctx, {
+        type:'line', data:{ labels:data.labels, datasets },
+        options:{ responsive:true, interaction:{mode:'index',intersect:false}, plugins:{ title:{ display:true, text:'Composite Sovereign Risk Index (Last 50 Years)' } }, scales:{ y:{ type:'linear', position:'left', min:0, max:1 }, y2:{ type:'linear', position:'right', min:0, max:1, grid:{ drawOnChartArea:false } } }
       });
     }
-    function adjustMonths(date, offset) {
-      const [y,m,d] = date.split('-'); let year=parseInt(y), month=parseInt(m)+offset;
-      while(month<1){month+=12;year--;} while(month>12){month-=12;year++;}
-      return `${year}-${String(month).padStart(2,'0')}-${d}`;
-    }
-    main();
+
+    document.getElementById('updateButton').addEventListener('click', drawChart);
+    drawChart();
   </script>
 </body>
 </html>
