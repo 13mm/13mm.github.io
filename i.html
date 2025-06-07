@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sovereign Risk Chart - FRED Only</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <style>
+    body { font-family: sans-serif; margin: 40px; }
+    canvas { max-width: 1000px; }
+  </style>
+</head>
+<body>
+  <h2>Sovereign Risk Indicators (FRED Data Only)</h2>
+  <canvas id="chart"></canvas>
+  <script>
+    const API_KEY = 'cfa73f0407d4cc7159dfc10b1a7f99b4'; // ← FRED APIキーを挿入
+    // 使用するFREDシリーズ
+    const seriesIds = {
+      debtPctGDP: 'GFDEGDQ188S',    // 連邦債務対GDP（四半期）
+      nominal10y: 'DGS10',           // 10年国債利回り（名目）
+      cpi: 'CPIAUCSL'                // 消費者物価指数（CPI）
+    };
+
+    async function fetchSeries(id) {
+      const url = 'https://api.stlouisfed.org/fred/series/observations';
+      const res = await axios.get(url, {
+        params: {
+          series_id: id,
+          api_key: API_KEY,
+          file_type: 'json',
+          observation_start: '2000-01-01',
+          frequency: 'm'
+        }
+      });
+      return res.data.observations
+        .map(o => ({ date: o.date, value: parseFloat(o.value) }))
+        .filter(d => !isNaN(d.value));
+    }
+
+    async function main() {
+      const [debt, nom, cpi] = await Promise.all([
+        fetchSeries(seriesIds.debtPctGDP),
+        fetchSeries(seriesIds.nominal10y),
+        fetchSeries(seriesIds.cpi)
+      ]);
+
+      // 年率CPI変化率
+      const inflation = cpi.map((d, i) => {
+        const prev = cpi.find(x => x.date === adjustMonths(d.date, -12));
+        return prev ? { date: d.date, value: ((d.value - prev.value) / prev.value) * 100 } : null;
+      }).filter(d => d);
+
+      // 実質金利 = 名目 - インフレ
+      const realRate = nom.map(d => {
+        const inf = inflation.find(x => x.date === d.date);
+        return inf ? { date: d.date, value: d.value - inf.value } : null;
+      }).filter(d => d);
+
+      // 共通の日付でフィルタ
+      const dates = debt.map(d => d.date).filter(date => realRate.some(r => r.date === date));
+      const debtData = dates.map(date => debt.find(d => d.date === date).value);
+      const realData = dates.map(date => realRate.find(r => r.date === date).value);
+
+      const ctx = document.getElementById('chart').getContext('2d');
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: dates,
+          datasets: [
+            {
+              label: 'Federal Debt % of GDP',
+              data: debtData,
+              borderColor: 'blue',
+              yAxisID: 'y'
+            },
+            {
+              label: 'Real 10y Yield (%)',
+              data: realData,
+              borderColor: 'red',
+              yAxisID: 'y2'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          interaction: { mode: 'index', intersect: false },
+          plugins: { title: { display: true, text: 'Sovereign Risk Indicators' } },
+          scales: {
+            y: { type: 'linear', position: 'left', title: { display: true, text: 'Debt % of GDP' } },
+            y2: { type: 'linear', position: 'right', title: { display: true, text: 'Real Yield (%)' }, grid: { drawOnChartArea: false } }
+          }
+        }
+      });
+    }
+
+    function adjustMonths(date, offset) {
+      const [y, m] = date.split('-');
+      let year = parseInt(y), month = parseInt(m) + offset;
+      while (month < 1) { month += 12; year -= 1; }
+      while (month > 12) { month -= 12; year += 1; }
+      return `${year.toString().padStart(4,'0')}-${month.toString().padStart(2,'0')}`;
+    }
+
+    // ローカルサーバで実行してください (http://localhost:8000など)
+    main().catch(err => console.error(err));
+  </script>
+</body>
+</html>
