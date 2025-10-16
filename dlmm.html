@@ -207,7 +207,7 @@
     }
     .result-table th, .result-table td {
       font-size: 12px;
-      padding: 8px;
+      padding: 6px;
     }
     .radio-group {
       flex-direction: column;
@@ -232,11 +232,11 @@
 
     <form class="grid">
       <label>binStep <input id="binStep" type="number" value="10" step="1" min="1"></label>
-      <label>初期価格 <input id="initialPrice" type="number" value="200" step="0.0001"></label>
-      <label>トークンA(ex.SOL) <input id="baseAmount" type="number" value="2.5" step="0.0001"></label>
-      <label>トークンB(ex.USDC) <input id="quoteAmount" type="number" value="500" step="0.0001"></label>
-      <label>下限価格 <input id="lowerPrice" type="number" value="180" step="0.0001"></label>
-      <label>上限価格 <input id="upperPrice" type="number" value="220" step="0.0001"></label>
+      <label>初期価格 <input id="initialPrice" type="number" value="200" step="1" min="0"></label>
+      <label>トークンA(ex.SOL) <input id="baseAmount" type="number" value="2" step="1" min="0"></label>
+      <label>トークンB(ex.USDC) <input id="quoteAmount" type="number" value="500" step="1" min="0"></label>
+      <label>下限価格 <input id="lowerPrice" type="number" value="180" step="1" min="0"></label>
+      <label>上限価格 <input id="upperPrice" type="number" value="220" step="1" min="0"></label>
       <label>戦略型
         <div class="radio-group">
           <label class="radio-label">
@@ -253,7 +253,7 @@
           </label>
         </div>
       </label>
-      <label>現在価格 <input id="currentPrice" type="number" value="190" step="0.0001"></label>
+      <label>現在価格 <input id="currentPrice" type="number" value="190" step="1" min="0"></label>
     </form>
 
     <div class="table-wrapper">
@@ -493,9 +493,9 @@ function positionAnalysis(params, currentPrice) {
 
 function simulate() {
   const params = {
-    binStep: Math.floor(+document.getElementById('binStep').value || 10), // 整数に
+    binStep: +document.getElementById('binStep').value || 10,
     initialPrice: +document.getElementById('initialPrice').value || 200,
-    baseAmount: +document.getElementById('baseAmount').value || 2.5,
+    baseAmount: +document.getElementById('baseAmount').value || 2,
     quoteAmount: +document.getElementById('quoteAmount').value || 500,
     lowerPrice: +document.getElementById('lowerPrice').value || 180,
     upperPrice: +document.getElementById('upperPrice').value || 220,
@@ -537,7 +537,7 @@ function simulate() {
 
   document.getElementById('totalBase_lower').textContent = lowerResult.totalBase.toFixed(4);
   document.getElementById('totalBase_current').textContent = currentResult.totalBase.toFixed(4);
-  document.getElementById('totalBase_upper').textContent = lowerResult.totalBase.toFixed(4);
+  document.getElementById('totalBase_upper').textContent = upperResult.totalBase.toFixed(4); // 修正：lowerResult → upperResult
 
   document.getElementById('totalQuote_lower').textContent = lowerResult.totalQuote.toFixed(4);
   document.getElementById('totalQuote_current').textContent = currentResult.totalQuote.toFixed(4);
@@ -562,15 +562,7 @@ function simulate() {
 document.addEventListener('DOMContentLoaded', () => {
   const inputs = ['binStep', 'initialPrice', 'baseAmount', 'quoteAmount', 'lowerPrice', 'upperPrice', 'currentPrice'];
   inputs.forEach(id => {
-    const input = document.getElementById(id);
-    if (id === 'binStep') {
-      input.addEventListener('input', () => {
-        input.value = Math.floor(input.value); // 整数に制限
-        simulate();
-      });
-    } else {
-      input.addEventListener('input', simulate);
-    }
+    document.getElementById(id).addEventListener('input', simulate);
   });
   document.querySelectorAll('input[name="strategy"]').forEach(radio => {
     radio.addEventListener('change', simulate);
