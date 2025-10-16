@@ -2,33 +2,35 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DLMM Position Simulator (dlmm.ts 準拠)</title>
 <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700&display=swap" rel="stylesheet">
 <style>
   body {
     font-family: 'M PLUS Rounded 1c', sans-serif;
-    margin: 40px auto;
+    margin: 20px auto;
     max-width: 900px;
-    background: linear-gradient(135deg, #ffe6f0, #e6f3ff);
+    background: linear-gradient(135deg, #fff0f5, #e6f3ff);
     color: #4a4a4a;
     line-height: 1.6;
+    padding: 10px;
   }
   h1 {
-    font-size: 24px;
-    margin-bottom: 30px;
+    font-size: 28px;
+    margin-bottom: 25px;
     text-align: center;
     color: #ff6b9b;
-    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.1);
   }
   form {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 15px 25px;
+    gap: 12px 20px;
     background: #fff;
-    padding: 25px;
-    border-radius: 15px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-    border: 2px solid #ffd1e3;
+    padding: 20px;
+    border-radius: 20px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    border: 3px solid #ffd1e3;
   }
   label {
     display: flex;
@@ -38,29 +40,29 @@
     color: #ff6b9b;
     font-weight: 600;
   }
-  input, select {
+  input {
     flex: 1;
-    margin-left: 12px;
+    margin-left: 10px;
     padding: 8px 12px;
     border: 2px solid #ffccdd;
-    border-radius: 10px;
+    border-radius: 12px;
     background: #fff5f8;
     font-family: 'M PLUS Rounded 1c', sans-serif;
-    font-size: 14px;
+    font-size: 15px;
     transition: border-color 0.3s ease;
   }
-  input:focus, select:focus {
+  input:focus {
     border-color: #ff6b9b;
     outline: none;
   }
   button {
     grid-column: 1 / -1;
     padding: 12px 20px;
-    font-size: 16px;
+    font-size: 18px;
     font-weight: 700;
     border: none;
-    border-radius: 12px;
-    background: linear-gradient(135deg, #ff8ab5, #ff6b9b);
+    border-radius: 15px;
+    background: linear-gradient(135deg, #ff9cc2, #ff6b9b);
     color: #fff;
     cursor: pointer;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -77,27 +79,27 @@
     position: relative;
     padding: 20px;
     border-radius: 20px;
-    background: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.95);
   }
   .container::before {
-    content: '✨';
+    content: '🌟';
     position: absolute;
     top: -15px;
-    left: 20px;
-    font-size: 24px;
+    left: 15px;
+    font-size: 28px;
     color: #ff6b9b;
   }
   .container::after {
-    content: '🌸';
+    content: '💗';
     position: absolute;
     bottom: -15px;
-    right: 20px;
-    font-size: 24px;
+    right: 15px;
+    font-size: 28px;
     color: #ff6b9b;
   }
   /* 結果表のスタイル */
   .result-table {
-    margin-top: 25px;
+    margin-top: 20px;
     width: 100%;
     border-collapse: separate;
     border-spacing: 0;
@@ -105,24 +107,32 @@
     border-radius: 15px;
     overflow: hidden;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-    border: 2px solid #ffd1e3;
+    border: 3px solid #ffd1e3;
   }
   .result-table th, .result-table td {
-    padding: 12px 15px;
-    text-align: left;
+    padding: 10px 12px;
+    text-align: center;
     font-size: 14px;
     color: #4a4a4a;
+    border-bottom: 1px solid #ffd1e3;
   }
   .result-table th {
     background: linear-gradient(135deg, #ffccdd, #ffe6f0);
     color: #ff6b9b;
     font-weight: 700;
   }
-  .result-table tr {
-    transition: background 0.2s ease;
+  .result-table th:not(:first-child) {
+    border-left: 1px solid #ffd1e3;
+  }
+  .result-table td:not(:first-child) {
+    border-left: 1px solid #ffd1e3;
   }
   .result-table tr:hover {
     background: #fff5f8;
+  }
+  .result-table td:first-child {
+    text-align: left;
+    font-weight: 600;
   }
   .result-table td:first-child::before {
     margin-right: 8px;
@@ -138,50 +148,138 @@
   .result-table tr:nth-child(8) td:first-child::before { content: '📋'; }
   .result-table tr:nth-child(9) td:first-child::before { content: '🟦'; }
   .result-table tr:nth-child(10) td:first-child::before { content: '🟪'; }
+  /* レスポンシブ対応 */
+  .table-wrapper {
+    overflow-x: auto;
+    margin-top: 20px;
+  }
+  /* シナリオごとの色分け */
+  .result-table th.lower { background: linear-gradient(135deg, #d4f0ff, #e6f3ff); }
+  .result-table th.current { background: linear-gradient(135deg, #ffccdd, #ffe6f0); }
+  .result-table th.upper { background: linear-gradient(135deg, #e6ffe6, #d4ffd4); }
+  .result-table td.lower { background: #f0faff; }
+  .result-table td.current { background: #fff5f8; }
+  .result-table td.upper { background: #f0fff0; }
+  /* ラジオボタンのスタイル */
+  .radio-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-left: 10px;
+    align-items: center;
+  }
+  .radio-label {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 12px;
+    border: 2px solid #ffccdd;
+    border-radius: 12px;
+    background: #fff5f8;
+    cursor: pointer;
+    font-size: 15px;
+    color: #ff6b9b;
+    transition: all 0.2s ease;
+  }
+  .radio-label:hover {
+    background: #ffe6f0;
+    border-color: #ff8ab5;
+    transform: scale(1.05);
+  }
+  .radio-label input[type="radio"] {
+    display: none;
+  }
+  .radio-label input[type="radio"]:checked + span {
+    background: linear-gradient(135deg, #ff9cc2, #ff6b9b);
+    color: #fff;
+    border-radius: 10px;
+    padding: 6px 10px;
+    box-shadow: 0 2px 8px rgba(255, 107, 155, 0.3);
+  }
+  .radio-label span {
+    padding: 4px 8px;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+  }
+  .radio-label span::before {
+    content: '✨';
+    margin-right: 5px;
+  }
+  /* モバイル対応 */
+  @media (max-width: 600px) {
+    form {
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+    .result-table th, .result-table td {
+      font-size: 12px;
+      padding: 8px;
+    }
+    .radio-group {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .radio-label {
+      width: 100%;
+      justify-content: center;
+    }
+  }
 </style>
 </head>
 <body>
   <div class="container">
-    <h1>💖 DLMM Position Simulator（dlmm.ts 準拠）💖</h1>
+    <h1>🌟 DLMM Position Simulator（dlmm.ts 準拠）💗</h1>
 
     <form class="grid">
       <label>binStep <input id="binStep" type="number" value="10" step="1"></label>
       <label>初期価格 <input id="initialPrice" type="number" value="200" step="0.0001"></label>
-      <label>Baseトークン(ex.SOL) <input id="baseAmount" type="number" value="2.5" step="0.0001"></label>
-      <label>Quoteトークン(ex.USDC) <input id="quoteAmount" type="number" value="500" step="0.0001"></label>
+      <label>トークンA(ex.SOL) <input id="baseAmount" type="number" value="2.5" step="0.0001"></label>
+      <label>トークンB(ex.USDC) <input id="quoteAmount" type="number" value="500" step="0.0001"></label>
       <label>下限価格 <input id="lowerPrice" type="number" value="180" step="0.0001"></label>
       <label>上限価格 <input id="upperPrice" type="number" value="220" step="0.0001"></label>
       <label>戦略型
-        <select id="strategy">
-          <option value="spot">spot</option>
-          <option value="bid-ask" selected>bid-ask</option>
-          <option value="curve">curve</option>
-        </select>
+        <div class="radio-group">
+          <label class="radio-label">
+            <input type="radio" name="strategy" value="spot" checked>
+            <span>Spot</span>
+          </label>
+          <label class="radio-label">
+            <input type="radio" name="strategy" value="bid-ask">
+            <span>Bid-Ask</span>
+          </label>
+          <label class="radio-label">
+            <input type="radio" name="strategy" value="curve">
+            <span>Curve</span>
+          </label>
+        </div>
       </label>
       <label>現在価格 <input id="currentPrice" type="number" value="190" step="0.0001"></label>
-      <button type="button" onclick="simulate()">シミュレーション🎉</button>
+      <button type="button" onclick="simulate()">シミュレーション🎀</button>
     </form>
 
-    <table id="output" class="result-table" style="display: none;">
-      <thead>
-        <tr>
-          <th>項目</th>
-          <th>値</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr><td>初期TVL</td><td id="initialValue"></td></tr>
-        <tr><td>現在TVL</td><td id="currentValue"></td></tr>
-        <tr><td>TVL Change</td><td id="valueChangePct"></td></tr>
-        <tr><td>Profit/Loss</td><td id="profitLoss"></td></tr>
-        <tr><td>価格変動</td><td id="priceChangePct"></td></tr>
-        <tr><td>Base Tokens(ex.SOL)</td><td id="totalBase"></td></tr>
-        <tr><td>Quote Tokens(ex.USDC)</td><td id="totalQuote"></td></tr>
-        <tr><td>Total Bins</td><td id="totalBins"></td></tr>
-        <tr><td>Base Bins</td><td id="baseBins"></td></tr>
-        <tr><td>Quote Bins</td><td id="quoteBins"></td></tr>
-      </tbody>
-    </table>
+    <div class="table-wrapper">
+      <table id="output" class="result-table" style="display: none;">
+        <thead>
+          <tr>
+            <th>項目</th>
+            <th class="lower">下限価格</th>
+            <th class="current">現在価格</th>
+            <th class="upper">上限価格</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>初期TVL</td><td id="initialValue_lower" class="lower"></td><td id="initialValue_current" class="current"></td><td id="initialValue_upper" class="upper"></td></tr>
+          <tr><td>現在TVL</td><td id="currentValue_lower" class="lower"></td><td id="currentValue_current" class="current"></td><td id="currentValue_upper" class="upper"></td></tr>
+          <tr><td>TVL Change</td><td id="valueChangePct_lower" class="lower"></td><td id="valueChangePct_current" class="current"></td><td id="valueChangePct_upper" class="upper"></td></tr>
+          <tr><td>Profit/Loss</td><td id="profitLoss_lower" class="lower"></td><td id="profitLoss_current" class="current"></td><td id="profitLoss_upper" class="upper"></td></tr>
+          <tr><td>価格変動</td><td id="priceChangePct_lower" class="lower"></td><td id="priceChangePct_current" class="current"></td><td id="priceChangePct_upper" class="upper"></td></tr>
+          <tr><td>A Tokens(ex.SOL)</td><td id="totalBase_lower" class="lower"></td><td id="totalBase_current" class="current"></td><td id="totalBase_upper" class="upper"></td></tr>
+          <tr><td>B Tokens(ex.USDC)</td><td id="totalQuote_lower" class="lower"></td><td id="totalQuote_current" class="current"></td><td id="totalQuote_upper" class="upper"></td></tr>
+          <tr><td>Total Bins</td><td id="totalBins_lower" class="lower"></td><td id="totalBins_current" class="current"></td><td id="totalBins_upper" class="upper"></td></tr>
+          <tr><td>Base Bins</td><td id="baseBins_lower" class="lower"></td><td id="baseBins_current" class="current"></td><td id="baseBins_upper" class="upper"></td></tr>
+          <tr><td>Quote Bins</td><td id="quoteBins_lower" class="lower"></td><td id="quoteBins_current" class="current"></td><td id="quoteBins_upper" class="upper"></td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 
 <script>
@@ -375,9 +473,9 @@ function positionAnalysis(params, currentPrice) {
   const initialValue = params.baseAmount * params.initialPrice + params.quoteAmount;
   const currentValue = analysis.totalValueInQuote;
 
-  const valueChangePct = ((currentValue - initialValue) / initialValue) * 100;
+  const valueChangePct = initialValue > 0 ? ((currentValue - initialValue) / initialValue) * 100 : 0;
   const profitLoss = currentValue - initialValue;
-  const priceChangePct = ((currentPrice - params.initialPrice) / params.initialPrice) * 100;
+  const priceChangePct = params.initialPrice > 0 ? ((currentPrice - params.initialPrice) / params.initialPrice) * 100 : 0;
 
   return {
     initialValue,
@@ -395,30 +493,82 @@ function positionAnalysis(params, currentPrice) {
 
 function simulate() {
   const params = {
-    binStep: +document.getElementById('binStep').value,
-    initialPrice: +document.getElementById('initialPrice').value,
-    baseAmount: +document.getElementById('baseAmount').value,
-    quoteAmount: +document.getElementById('quoteAmount').value,
-    lowerPrice: +document.getElementById('lowerPrice').value,
-    upperPrice: +document.getElementById('upperPrice').value,
-    strategy: document.getElementById('strategy').value
+    binStep: +document.getElementById('binStep').value || 10,
+    initialPrice: +document.getElementById('initialPrice').value || 200,
+    baseAmount: +document.getElementById('baseAmount').value || 2.5,
+    quoteAmount: +document.getElementById('quoteAmount').value || 500,
+    lowerPrice: +document.getElementById('lowerPrice').value || 180,
+    upperPrice: +document.getElementById('upperPrice').value || 220,
+    strategy: document.querySelector('input[name="strategy"]:checked').value
   };
-  const currentPrice = +document.getElementById('currentPrice').value;
+  const currentPrice = +document.getElementById('currentPrice').value || 190;
 
-  const res = positionAnalysis(params, currentPrice);
-  document.getElementById('initialValue').textContent = res.initialValue.toFixed(4);
-  document.getElementById('currentValue').textContent = res.currentValue.toFixed(4);
-  document.getElementById('valueChangePct').textContent = res.valueChangePct.toFixed(2) + '%';
-  document.getElementById('profitLoss').textContent = res.profitLoss.toFixed(4);
-  document.getElementById('priceChangePct').textContent = res.priceChangePct.toFixed(2) + '%';
-  document.getElementById('totalBase').textContent = res.totalBase.toFixed(4);
-  document.getElementById('totalQuote').textContent = res.totalQuote.toFixed(4);
-  document.getElementById('totalBins').textContent = res.totalBins;
-  document.getElementById('baseBins').textContent = res.baseBins;
-  document.getElementById('quoteBins').textContent = res.quoteBins;
+  // 入力値の検証
+  if (params.lowerPrice <= 0 || params.upperPrice <= params.lowerPrice || params.binStep <= 0 || params.initialPrice <= 0) {
+    document.getElementById('output').style.display = 'none';
+    return;
+  }
+
+  // 3つのシナリオ（下限、現在、上限）でシミュレーション
+  const lowerResult = positionAnalysis(params, params.lowerPrice);
+  const currentResult = positionAnalysis(params, currentPrice);
+  const upperResult = positionAnalysis(params, params.upperPrice);
+
+  // テーブルに値を設定
+  document.getElementById('initialValue_lower').textContent = lowerResult.initialValue.toFixed(4);
+  document.getElementById('initialValue_current').textContent = currentResult.initialValue.toFixed(4);
+  document.getElementById('initialValue_upper').textContent = upperResult.initialValue.toFixed(4);
+
+  document.getElementById('currentValue_lower').textContent = lowerResult.currentValue.toFixed(4);
+  document.getElementById('currentValue_current').textContent = currentResult.currentValue.toFixed(4);
+  document.getElementById('currentValue_upper').textContent = upperResult.currentValue.toFixed(4);
+
+  document.getElementById('valueChangePct_lower').textContent = lowerResult.valueChangePct.toFixed(2) + '%';
+  document.getElementById('valueChangePct_current').textContent = currentResult.valueChangePct.toFixed(2) + '%';
+  document.getElementById('valueChangePct_upper').textContent = upperResult.valueChangePct.toFixed(2) + '%';
+
+  document.getElementById('profitLoss_lower').textContent = lowerResult.profitLoss.toFixed(4);
+  document.getElementById('profitLoss_current').textContent = currentResult.profitLoss.toFixed(4);
+  document.getElementById('profitLoss_upper').textContent = upperResult.profitLoss.toFixed(4);
+
+  document.getElementById('priceChangePct_lower').textContent = lowerResult.priceChangePct.toFixed(2) + '%';
+  document.getElementById('priceChangePct_current').textContent = currentResult.priceChangePct.toFixed(2) + '%';
+  document.getElementById('priceChangePct_upper').textContent = upperResult.priceChangePct.toFixed(2) + '%';
+
+  document.getElementById('totalBase_lower').textContent = lowerResult.totalBase.toFixed(4);
+  document.getElementById('totalBase_current').textContent = currentResult.totalBase.toFixed(4);
+  document.getElementById('totalBase_upper').textContent = upperResult.totalBase.toFixed(4);
+
+  document.getElementById('totalQuote_lower').textContent = lowerResult.totalQuote.toFixed(4);
+  document.getElementById('totalQuote_current').textContent = currentResult.totalQuote.toFixed(4);
+  document.getElementById('totalQuote_upper').textContent = upperResult.totalQuote.toFixed(4);
+
+  document.getElementById('totalBins_lower').textContent = lowerResult.totalBins;
+  document.getElementById('totalBins_current').textContent = currentResult.totalBins;
+  document.getElementById('totalBins_upper').textContent = upperResult.totalBins;
+
+  document.getElementById('baseBins_lower').textContent = lowerResult.baseBins;
+  document.getElementById('baseBins_current').textContent = currentResult.baseBins;
+  document.getElementById('baseBins_upper').textContent = upperResult.baseBins;
+
+  document.getElementById('quoteBins_lower').textContent = lowerResult.quoteBins;
+  document.getElementById('quoteBins_current').textContent = currentResult.quoteBins;
+  document.getElementById('quoteBins_upper').textContent = upperResult.quoteBins;
 
   document.getElementById('output').style.display = 'table';
 }
+
+// 自動更新のためのイベントリスナー
+document.addEventListener('DOMContentLoaded', () => {
+  const inputs = ['binStep', 'initialPrice', 'baseAmount', 'quoteAmount', 'lowerPrice', 'upperPrice', 'currentPrice'];
+  inputs.forEach(id => {
+    document.getElementById(id).addEventListener('input', simulate);
+  });
+  document.querySelectorAll('input[name="strategy"]').forEach(radio => {
+    radio.addEventListener('change', simulate);
+  });
+  simulate(); // 初期表示
+});
 </script>
 </body>
 </html>
