@@ -194,10 +194,6 @@
     border-radius: 8px;
     transition: all 0.2s ease;
   }
-  .radio-label span::before {
-    content: '✨';
-    margin-right: 5px;
-  }
   button {
     padding: 10px 20px;
     border: 2px solid #ff6b9b;
@@ -249,28 +245,28 @@
 </head>
 <body>
   <div class="container">
-    <h1>🌟 DLMM Position Simulator💗</h1>
+    <h1>💫 DLMM Position Simulator 💫</h1>
 
     <form class="grid">
       <label>binStep <input id="binStep" type="number" value="10" step="1" min="1"></label>
       <label>初期価格 <input id="initialPrice" type="number" value="200" step="1" min="0"></label>
-      <label>トークンA(ex.SOL) <input id="baseAmount" type="number" value="2" step="1" min="0"></label>
-      <label>トークンB(ex.USDC) <input id="quoteAmount" type="number" value="500" step="1" min="0"></label>
+      <label>baseトークンA(ex.SOL) <input id="baseAmount" type="number" value="2" step="1" min="0"></label>
+      <label>quoteトークンB(ex.USDC) <input id="quoteAmount" type="number" value="500" step="1" min="0"></label>
       <label>下限価格 <input id="lowerPrice" type="number" value="180" step="1" min="0"></label>
       <label>上限価格 <input id="upperPrice" type="number" value="220" step="1" min="0"></label>
       <label>戦略型
         <div class="radio-group">
           <label class="radio-label">
             <input type="radio" name="strategy" value="spot" checked>
-            <span>Spot</span>
+            <span>🚥Spot</span>
           </label>
           <label class="radio-label">
             <input type="radio" name="strategy" value="bid-ask">
-            <span>Bid-Ask</span>
+            <span>🌱Bid-Ask</span>
           </label>
           <label class="radio-label">
             <input type="radio" name="strategy" value="curve">
-            <span>Curve</span>
+            <span>🎄Curve</span>
           </label>
         </div>
       </label>
@@ -296,8 +292,8 @@
           <tr><td>TVL Change</td><td id="valueChangePct_lower" class="lower"></td><td id="valueChangePct_current" class="current"></td><td id="valueChangePct_upper" class="upper"></td></tr>
           <tr><td>Profit/Loss</td><td id="profitLoss_lower" class="lower"></td><td id="profitLoss_current" class="current"></td><td id="profitLoss_upper" class="upper"></td></tr>
           <tr><td>価格変動</td><td id="priceChangePct_lower" class="lower"></td><td id="priceChangePct_current" class="current"></td><td id="priceChangePct_upper" class="upper"></td></tr>
-          <tr><td>A Tokens(ex.SOL)</td><td id="totalBase_lower" class="lower"></td><td id="totalBase_current" class="current"></td><td id="totalBase_upper" class="upper"></td></tr>
-          <tr><td>B Tokens(ex.USDC)</td><td id="totalQuote_lower" class="lower"></td><td id="totalQuote_current" class="current"></td><td id="totalQuote_upper" class="upper"></td></tr>
+          <tr><td>Base Tokens(ex.SOL)</td><td id="totalBase_lower" class="lower"></td><td id="totalBase_current" class="current"></td><td id="totalBase_upper" class="upper"></td></tr>
+          <tr><td>Quote Tokens(ex.USDC)</td><td id="totalQuote_lower" class="lower"></td><td id="totalQuote_current" class="current"></td><td id="totalQuote_upper" class="upper"></td></tr>
           <tr><td>Total Bins</td><td id="totalBins_lower" class="lower"></td><td id="totalBins_current" class="current"></td><td id="totalBins_upper" class="upper"></td></tr>
           <tr><td>Base Bins</td><td id="baseBins_lower" class="lower"></td><td id="baseBins_current" class="current"></td><td id="baseBins_upper" class="upper"></td></tr>
           <tr><td>Quote Bins</td><td id="quoteBins_lower" class="lower"></td><td id="quoteBins_current" class="current"></td><td id="quoteBins_upper" class="upper"></td></tr>
