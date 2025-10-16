@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>DLMM Position Simulator (dlmm.ts 準拠)</title>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  body {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    margin: 40px auto;
+    max-width: 900px;
+    background: linear-gradient(135deg, #ffe6f0, #e6f3ff);
+    color: #4a4a4a;
+    line-height: 1.6;
+  }
+  h1 {
+    font-size: 24px;
+    margin-bottom: 30px;
+    text-align: center;
+    color: #ff6b9b;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
+  }
+  form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px 25px;
+    background: #fff;
+    padding: 25px;
+    border-radius: 15px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    border: 2px solid #ffd1e3;
+  }
+  label {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 16px;
+    color: #ff6b9b;
+    font-weight: 600;
+  }
+  input, select {
+    flex: 1;
+    margin-left: 12px;
+    padding: 8px 12px;
+    border: 2px solid #ffccdd;
+    border-radius: 10px;
+    background: #fff5f8;
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-size: 14px;
+    transition: border-color 0.3s ease;
+  }
+  input:focus, select:focus {
+    border-color: #ff6b9b;
+    outline: none;
+  }
+  button {
+    grid-column: 1 / -1;
+    padding: 12px 20px;
+    font-size: 16px;
+    font-weight: 700;
+    border: none;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #ff8ab5, #ff6b9b);
+    color: #fff;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 4px 15px rgba(255, 107, 155, 0.3);
+  }
+  button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 107, 155, 0.5);
+  }
+  button:active {
+    transform: translateY(0);
+  }
+  .container {
+    position: relative;
+    padding: 20px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.9);
+  }
+  .container::before {
+    content: '✨';
+    position: absolute;
+    top: -15px;
+    left: 20px;
+    font-size: 24px;
+    color: #ff6b9b;
+  }
+  .container::after {
+    content: '🌸';
+    position: absolute;
+    bottom: -15px;
+    right: 20px;
+    font-size: 24px;
+    color: #ff6b9b;
+  }
+  /* 結果表のスタイル */
+  .result-table {
+    margin-top: 25px;
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: #fff;
+    border-radius: 15px;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    border: 2px solid #ffd1e3;
+  }
+  .result-table th, .result-table td {
+    padding: 12px 15px;
+    text-align: left;
+    font-size: 14px;
+    color: #4a4a4a;
+  }
+  .result-table th {
+    background: linear-gradient(135deg, #ffccdd, #ffe6f0);
+    color: #ff6b9b;
+    font-weight: 700;
+  }
+  .result-table tr {
+    transition: background 0.2s ease;
+  }
+  .result-table tr:hover {
+    background: #fff5f8;
+  }
+  .result-table td:first-child::before {
+    margin-right: 8px;
+    font-size: 16px;
+  }
+  .result-table tr:nth-child(1) td:first-child::before { content: '💰'; }
+  .result-table tr:nth-child(2) td:first-child::before { content: '📊'; }
+  .result-table tr:nth-child(3) td:first-child::before { content: '📈'; }
+  .result-table tr:nth-child(4) td:first-child::before { content: '💸'; }
+  .result-table tr:nth-child(5) td:first-child::before { content: '📉'; }
+  .result-table tr:nth-child(6) td:first-child::before { content: '🪙'; }
+  .result-table tr:nth-child(7) td:first-child::before { content: '💵'; }
+  .result-table tr:nth-child(8) td:first-child::before { content: '📋'; }
+  .result-table tr:nth-child(9) td:first-child::before { content: '🟦'; }
+  .result-table tr:nth-child(10) td:first-child::before { content: '🟪'; }
+</style>
+</head>
+<body>
+  <div class="container">
+    <h1>💖 DLMM Position Simulator（dlmm.ts 準拠）💖</h1>
+
+    <form class="grid">
+      <label>binStep <input id="binStep" type="number" value="10" step="1"></label>
+      <label>初期価格 <input id="initialPrice" type="number" value="200" step="0.0001"></label>
+      <label>Baseトークン(ex.SOL) <input id="baseAmount" type="number" value="2.5" step="0.0001"></label>
+      <label>Quoteトークン(ex.USDC) <input id="quoteAmount" type="number" value="500" step="0.0001"></label>
+      <label>下限価格 <input id="lowerPrice" type="number" value="180" step="0.0001"></label>
+      <label>上限価格 <input id="upperPrice" type="number" value="220" step="0.0001"></label>
+      <label>戦略型
+        <select id="strategy">
+          <option value="spot">spot</option>
+          <option value="bid-ask" selected>bid-ask</option>
+          <option value="curve">curve</option>
+        </select>
+      </label>
+      <label>現在価格 <input id="currentPrice" type="number" value="190" step="0.0001"></label>
+      <button type="button" onclick="simulate()">シミュレーション🎉</button>
+    </form>
+
+    <table id="output" class="result-table" style="display: none;">
+      <thead>
+        <tr>
+          <th>項目</th>
+          <th>値</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>初期TVL</td><td id="initialValue"></td></tr>
+        <tr><td>現在TVL</td><td id="currentValue"></td></tr>
+        <tr><td>TVL Change</td><td id="valueChangePct"></td></tr>
+        <tr><td>Profit/Loss</td><td id="profitLoss"></td></tr>
+        <tr><td>価格変動</td><td id="priceChangePct"></td></tr>
+        <tr><td>Base Tokens(ex.SOL)</td><td id="totalBase"></td></tr>
+        <tr><td>Quote Tokens(ex.USDC)</td><td id="totalQuote"></td></tr>
+        <tr><td>Total Bins</td><td id="totalBins"></td></tr>
+        <tr><td>Base Bins</td><td id="baseBins"></td></tr>
+        <tr><td>Quote Bins</td><td id="quoteBins"></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+<script>
+const CENTER_ID = 262144;
+
+// --- helpers (dlmm.ts equivalence) ---
+function getPriceFromId(id, binStep) {
+  const basis = 1 + binStep / 10000;
+  return basis ** (id - CENTER_ID);
+}
+function getIdFromPrice(price, binStep) {
+  if (price <= 0 || binStep <= 0) return 0;
+  const basis = 1 + binStep / 10000;
+  return Math.floor(Math.log(price) / Math.log(basis)) + CENTER_ID;
+}
+
+// --- core logic (faithful port of your Python) ---
+function getInitialBins(params) {
+  const { binStep, initialPrice, baseAmount, quoteAmount, lowerPrice, upperPrice, strategy } = params;
+
+  if (lowerPrice <= 0 || upperPrice <= lowerPrice || binStep <= 0 || initialPrice <= 0) {
+    return [];
+  }
+
+  const minId = getIdFromPrice(lowerPrice, binStep);
+  const maxId = getIdFromPrice(upperPrice, binStep);
+  const initialPriceId = getIdFromPrice(initialPrice, binStep);
+
+  const bins = [];
+  const quoteBins = [];
+  const baseBins = [];
+  for (let id = minId; id <= maxId; id++) {
+    const price = getPriceFromId(id, binStep);
+    bins.push({
+      id,
+      price,
+      initialTokenType: 'base',
+      initialAmount: 0,
+      initialValueInQuote: 0,
+      displayValue: 0,
+      currentTokenType: 'base',
+      currentAmount: 0,
+      currentValueInQuote: 0
+    });
+    if (id <= initialPriceId) quoteBins.push({ id, price });
+    if (id > initialPriceId) baseBins.push({ id, price });
+  }
+
+  // Distribute Quote
+  if (quoteAmount > 0 && quoteBins.length > 0) {
+    let totalWeight = 0;
+    const weights = new Map();
+    for (const qb of quoteBins) {
+      const dist = initialPriceId - qb.id;
+      let weight;
+      if (strategy === 'curve') {
+        const maxDist = initialPriceId - minId;
+        weight = maxDist > 0 ? (maxDist - dist) : 1;
+      } else if (strategy === 'bid-ask') {
+        weight = dist;
+      } else {
+        weight = 1;
+      }
+      totalWeight += weight;
+      weights.set(qb.id, weight);
+    }
+    if (totalWeight > 0) {
+      for (const b of bins) {
+        if (weights.has(b.id)) {
+          const amount = quoteAmount * (weights.get(b.id) / totalWeight);
+          b.initialTokenType = 'quote';
+          b.initialAmount = amount;
+          b.initialValueInQuote = amount;
+        }
+      }
+    }
+  }
+
+  // Distribute Base (by value)
+  if (baseAmount > 0 && baseBins.length > 0) {
+    let totalValueWeight = 0;
+    const totalValue = baseAmount * initialPrice;
+    const weights = new Map();
+    for (const bb of baseBins) {
+      const dist = bb.id - initialPriceId;
+      let weight;
+      if (strategy === 'curve') {
+        const maxDist = maxId - initialPriceId;
+        weight = maxDist > 0 ? (maxDist - dist) : 1;
+      } else if (strategy === 'bid-ask') {
+        weight = dist;
+      } else {
+        weight = 1;
+      }
+      const valueWeight = weight * bb.price;
+      totalValueWeight += valueWeight;
+      weights.set(bb.id, { weight, price: bb.price });
+    }
+    if (totalValueWeight > 0) {
+      for (const b of bins) {
+        if (weights.has(b.id)) {
+          const { weight, price } = weights.get(b.id);
+          const targetValue = totalValue * ((weight * price) / totalValueWeight);
+          const amount = targetValue / price;
+          b.initialTokenType = 'base';
+          b.initialAmount = amount;
+          b.initialValueInQuote = targetValue;
+        }
+      }
+    }
+  }
+
+  // Normalization (floating point correction)
+  const calculatedBaseSum = bins.reduce((s, b) => s + (b.initialTokenType === 'base' ? b.initialAmount : 0), 0);
+  const calculatedQuoteSum = bins.reduce((s, b) => s + (b.initialTokenType === 'quote' ? b.initialAmount : 0), 0);
+
+  if (baseAmount > 0 && calculatedBaseSum > 0) {
+    const baseCorrectionFactor = baseAmount / calculatedBaseSum;
+    for (const b of bins) {
+      if (b.initialTokenType === 'base') {
+        b.initialAmount *= baseCorrectionFactor;
+        b.initialValueInQuote = b.initialAmount * initialPrice;
+      }
+    }
+  }
+  if (quoteAmount > 0 && calculatedQuoteSum > 0) {
+    const quoteCorrectionFactor = quoteAmount / calculatedQuoteSum;
+    for (const b of bins) {
+      if (b.initialTokenType === 'quote') {
+        b.initialAmount *= quoteCorrectionFactor;
+        b.initialValueInQuote = b.initialAmount;
+      }
+    }
+  }
+
+  for (const b of bins) {
+    b.displayValue = b.initialValueInQuote;
+  }
+
+  bins.sort((a, b) => a.price - b.price);
+  return bins;
+}
+
+function runSimulation(initialBins, currentPrice, initialPrice) {
+  if (!initialBins || initialBins.length === 0) {
+    return { simulatedBins: [], analysis: { totalValueInQuote: 0, totalBase: 0, totalQuote: 0, totalBins: 0, baseBins: 0, quoteBins: 0 } };
+  }
+
+  const simulatedBins = initialBins.map(b => ({ ...b }));
+  let totalBase = 0, totalQuote = 0, baseBins = 0, quoteBins = 0;
+
+  for (const bin of simulatedBins) {
+    if (bin.initialAmount <= 0) {
+      bin.currentAmount = 0;
+      bin.currentValueInQuote = 0;
+      bin.currentTokenType = bin.initialTokenType;
+      bin.displayValue = 0;
+      continue;
+    }
+
+    if (currentPrice > bin.price) {
+      bin.currentTokenType = 'quote';
+      bin.currentAmount = (bin.initialTokenType === 'base')
+        ? (bin.initialAmount * bin.price)
+        : bin.initialAmount;
+      bin.currentValueInQuote = bin.currentAmount;
+      if (bin.currentAmount > 1e-12) { totalQuote += bin.currentAmount; quoteBins++; }
+    } else {
+      bin.currentTokenType = 'base';
+      bin.currentAmount = (bin.initialTokenType === 'quote')
+        ? (bin.initialAmount / bin.price)
+        : bin.initialAmount;
+      bin.currentValueInQuote = bin.currentAmount * currentPrice;
+      if (bin.currentAmount > 1e-12) { totalBase += bin.currentAmount; baseBins++; }
+    }
+  }
+
+  const totalBins = initialBins.filter(b => b.initialAmount > 1e-12).length;
+  const totalValueInQuote = totalQuote + (totalBase * currentPrice);
+
+  return {
+    simulatedBins,
+    analysis: { totalValueInQuote, totalBase, totalQuote, totalBins, baseBins, quoteBins }
+  };
+}
+
+function positionAnalysis(params, currentPrice) {
+  const bins = getInitialBins(params);
+  const { analysis } = runSimulation(bins, currentPrice, params.initialPrice);
+
+  const initialValue = params.baseAmount * params.initialPrice + params.quoteAmount;
+  const currentValue = analysis.totalValueInQuote;
+
+  const valueChangePct = ((currentValue - initialValue) / initialValue) * 100;
+  const profitLoss = currentValue - initialValue;
+  const priceChangePct = ((currentPrice - params.initialPrice) / params.initialPrice) * 100;
+
+  return {
+    initialValue,
+    currentValue,
+    valueChangePct,
+    profitLoss,
+    priceChangePct,
+    totalBase: analysis.totalBase,
+    totalQuote: analysis.totalQuote,
+    totalBins: analysis.totalBins,
+    baseBins: analysis.baseBins,
+    quoteBins: analysis.quoteBins
+  };
+}
+
+function simulate() {
+  const params = {
+    binStep: +document.getElementById('binStep').value,
+    initialPrice: +document.getElementById('initialPrice').value,
+    baseAmount: +document.getElementById('baseAmount').value,
+    quoteAmount: +document.getElementById('quoteAmount').value,
+    lowerPrice: +document.getElementById('lowerPrice').value,
+    upperPrice: +document.getElementById('upperPrice').value,
+    strategy: document.getElementById('strategy').value
+  };
+  const currentPrice = +document.getElementById('currentPrice').value;
+
+  const res = positionAnalysis(params, currentPrice);
+  document.getElementById('initialValue').textContent = res.initialValue.toFixed(4);
+  document.getElementById('currentValue').textContent = res.currentValue.toFixed(4);
+  document.getElementById('valueChangePct').textContent = res.valueChangePct.toFixed(2) + '%';
+  document.getElementById('profitLoss').textContent = res.profitLoss.toFixed(4);
+  document.getElementById('priceChangePct').textContent = res.priceChangePct.toFixed(2) + '%';
+  document.getElementById('totalBase').textContent = res.totalBase.toFixed(4);
+  document.getElementById('totalQuote').textContent = res.totalQuote.toFixed(4);
+  document.getElementById('totalBins').textContent = res.totalBins;
+  document.getElementById('baseBins').textContent = res.baseBins;
+  document.getElementById('quoteBins').textContent = res.quoteBins;
+
+  document.getElementById('output').style.display = 'table';
+}
+</script>
+</body>
+</html>
