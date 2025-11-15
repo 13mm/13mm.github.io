@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>テキストビューア</title>
+    <style>
+        body {
+            font-family: "Yu Gothic", "メイリオ", sans-serif;
+            line-height: 1.8;
+            padding: 20px;
+            background-color: #fdfdfd;
+            color: #333;
+        }
+        pre {
+            white-space: pre-wrap;  /* 改行を保持しつつ折り返す */
+            word-wrap: break-word;  /* 長い行も折り返す */
+            font-size: 16px;
+            background-color: #f7f7f7;
+            padding: 15px;
+            border-radius: 6px;
+            box-shadow: 0 0 5px rgba(0,0,0,0.1);
+        }
+        h1 {
+            font-size: 20px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <h1 id="filename">読み込み中...</h1>
+    <pre id="content">...</pre>
+
+    <script>
+        // URLパラメータから file を取得
+        const params = new URLSearchParams(window.location.search);
+        const file = params.get("file");
+
+        const filenameEl = document.getElementById("filename");
+        const contentEl = document.getElementById("content");
+
+        if(file){
+            filenameEl.textContent = file;
+
+            fetch(file)
+                .then(response => {
+                    if (!response.ok) throw new Error("読み込み失敗");
+                    return response.text();
+                })
+                .then(text => contentEl.textContent = text)
+                .catch(err => contentEl.textContent = "読み込みに失敗しました。\n" + err);
+        } else {
+            filenameEl.textContent = "ファイルが指定されていません";
+            contentEl.textContent = "";
+        }
+    </script>
+</body>
+</html>
