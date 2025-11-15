@@ -4,27 +4,29 @@
     <meta charset="UTF-8">
     <title>テキストビューア</title>
     <style>
-        body {
-            font-family: "Yu Gothic", "メイリオ", sans-serif;
-            line-height: 1.8;
-            padding: 20px;
-            background-color: #fdfdfd;
-            color: #333;
-        }
-        pre {
-            white-space: pre-wrap;  /* 改行を保持しつつ折り返す */
-            word-wrap: break-word;  /* 長い行も折り返す */
-            font-size: 16px;
-            background-color: #f7f7f7;
-            padding: 15px;
-            border-radius: 6px;
-            box-shadow: 0 0 5px rgba(0,0,0,0.1);
-        }
-        h1 {
-            font-size: 20px;
-            margin-bottom: 15px;
-        }
-    </style>
+    body {
+        font-family: "Yu Gothic", "メイリオ", sans-serif;
+        line-height: 1.8;
+        padding: 20px;
+        background-color: #fdfdfd;
+        color: #333;
+        font-size: 20px; /* 文字を大きく */
+    }
+    pre {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        font-size: 20px; /* pre内も同じサイズに */
+        background-color: #f7f7f7;
+        padding: 15px;
+        border-radius: 6px;
+        box-shadow: 0 0 5px rgba(0,0,0,0.1);
+    }
+    h1 {
+        font-size: 24px; /* タイトルも大きく */
+        margin-bottom: 15px;
+    }
+</style>
+
 </head>
 <body>
     <h1 id="filename">読み込み中...</h1>
