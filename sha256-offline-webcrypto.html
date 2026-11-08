@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SHA-256 繰り返し計算（Web Crypto API・完全オフライン）</title>
+<style>
+  :root { color-scheme: light dark; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px 16px; background: Canvas; color: CanvasText; }
+  main { width: min(760px, 100%); margin: 0 auto; }
+  h1 { margin: 0 0 8px; font-size: 1.55rem; }
+  .lead { margin: 0 0 18px; color: GrayText; line-height: 1.6; }
+  .offline { display: inline-block; margin: 0 0 8px; padding: 5px 9px; border: 1px solid #26834a; border-radius: 6px; color: #26834a; font-size: .85rem; font-weight: 650; }
+  label { display: block; margin: 18px 0 7px; font-weight: 650; }
+  textarea, input, select { width: 100%; padding: 11px 12px; border: 1px solid color-mix(in srgb, CanvasText 24%, transparent); border-radius: 8px; background: Canvas; color: CanvasText; font: inherit; }
+  textarea { min-height: 125px; resize: vertical; }
+  input[type="number"] { max-width: 240px; }
+  .hint { margin: 6px 0 0; color: GrayText; font-size: .88rem; line-height: 1.5; }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px; }
+  button { border: 1px solid color-mix(in srgb, CanvasText 25%, transparent); border-radius: 8px; padding: 10px 17px; background: ButtonFace; color: ButtonText; font: inherit; cursor: pointer; }
+  button.primary { background: #2457c5; color: white; border-color: #2457c5; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .status { margin-top: 18px; min-height: 1.5em; color: GrayText; font-size: .92rem; }
+  progress { width: 100%; height: 10px; margin-top: 10px; }
+  .result-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 24px; }
+  .result-head label { margin: 0; }
+  .result-head button { padding: 7px 12px; }
+  #output { min-height: 92px; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .note { margin-top: 24px; padding-top: 16px; border-top: 1px solid color-mix(in srgb, CanvasText 18%, transparent); color: GrayText; font-size: .88rem; line-height: 1.6; }
+  @media (prefers-color-scheme: dark) { button.primary { background: #477de8; border-color: #477de8; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>SHA-256 繰り返し計算</h1>
+  <div class="offline">完全オフライン対応・ブラウザー内蔵Web Crypto API</div>
+  <p class="lead">入力したテキストをSHA-256でハッシュ化し、指定した回数だけ繰り返します。2回目以降は、直前のSHA-256の出力（32バイトの生データ）をそのまま次の入力に使います。計算にはブラウザーに標準搭載されたWeb Crypto APIを使用します。外部ライブラリ・CDN・サーバー通信は使用しません。</p>
+
+  <label for="input">入力テキスト</label>
+  <textarea id="input" placeholder="ハッシュ化する文字列を入力"></textarea>
+
+  <label for="rounds">繰り返す回数</label>
+  <input id="rounds" type="number" min="1" step="1" value="1000" inputmode="numeric">
+
+  <p class="hint">方式：生データ方式（2回目以降は直前のハッシュ値32バイトをそのまま再ハッシュ）。16進数表示は結果を見やすく表示するためのもので、次の計算への入力には使いません。</p>
+
+  <div class="actions">
+    <button id="run" class="primary">SHA-256を実行</button>
+    <button id="cancel" disabled>停止</button>
+  </div>
+
+  <div class="status" id="status" role="status" aria-live="polite">待機中</div>
+  <progress id="progress" value="0" max="1"></progress>
+
+  <div class="result-head">
+    <label for="output">最終ハッシュ（16進数）</label>
+    <button id="copy" disabled>コピー</button>
+  </div>
+  <textarea id="output" readonly placeholder="計算結果がここに表示されます"></textarea>
+
+  <p class="note">このHTMLは外部ファイル・CDN・外部ライブラリを読み込みません。SHA-256計算にはブラウザー内蔵のWeb Crypto API（crypto.subtle.digest）を使用し、入力データを端末内で処理します。ネットワーク通信は行いません。ファイルを端末に保存してブラウザーで開き、ネット接続を切った状態でも利用できます（Web Crypto APIに対応したブラウザーが必要です）。このページの反復方式は「1回目：入力テキストのUTF-8バイト列をSHA-256 → 2回目以降：直前の32バイトのダイジェストをそのままSHA-256」という生データ方式です。16進数表示は結果表示専用で、次の計算には使いません。なお、単純なSHA-256反復はパスワード保存・照合用のKDF（Argon2id、scrypt、PBKDF2など）の代替にはなりません。</p>
+</main>
+<script>
+(() => {
+  'use strict';
+
+  // SHA-256 is computed by the browser's built-in Web Crypto API.
+  // No external library, CDN, server, or network request is used.
+  const inputEl = document.getElementById('input');
+  const roundsEl = document.getElementById('rounds');
+  const runBtn = document.getElementById('run');
+  const cancelBtn = document.getElementById('cancel');
+  const copyBtn = document.getElementById('copy');
+  const outputEl = document.getElementById('output');
+  const statusEl = document.getElementById('status');
+  const progressEl = document.getElementById('progress');
+
+  const webCryptoAvailable = !!(
+    globalThis.crypto &&
+    globalThis.crypto.subtle &&
+    typeof globalThis.crypto.subtle.digest === 'function' &&
+    typeof TextEncoder === 'function'
+  );
+
+  let cancelRequested = false;
+  const yieldToBrowser = () => new Promise(resolve => setTimeout(resolve, 0));
+  const toHex = bytes => Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+
+  if (!webCryptoAvailable) {
+    runBtn.disabled = true;
+    statusEl.textContent = 'このブラウザー／起動環境ではWeb Crypto APIを利用できません。最新のブラウザーでHTMLファイルを開いてください。';
+  } else {
+    statusEl.textContent = '待機中（ブラウザー内蔵Web Crypto APIを使用）';
+  }
+
+  runBtn.addEventListener('click', async () => {
+    if (!webCryptoAvailable) return;
+
+    const text = inputEl.value;
+    const rounds = Number(roundsEl.value);
+    if (!Number.isSafeInteger(rounds) || rounds < 1) {
+      statusEl.textContent = '回数は1以上の整数で指定してください。';
+      return;
+    }
+
+    cancelRequested = false;
+    runBtn.disabled = true;
+    cancelBtn.disabled = false;
+    copyBtn.disabled = true;
+    outputEl.value = '';
+    progressEl.max = rounds;
+    progressEl.value = 0;
+    const started = performance.now();
+    statusEl.textContent = `計算中：0 / ${rounds.toLocaleString()} 回`;
+
+    try {
+      const encoder = new TextEncoder();
+      let data = encoder.encode(text);
+      let digest = null;
+
+      for (let i = 1; i <= rounds; i++) {
+        if (cancelRequested) break;
+
+        // First round: UTF-8 input. Later rounds: the raw 32-byte digest.
+        digest = new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', data));
+        data = digest;
+
+        if (i === rounds || i % 100 === 0) {
+          progressEl.value = i;
+          statusEl.textContent = `計算中：${i.toLocaleString()} / ${rounds.toLocaleString()} 回`;
+          await yieldToBrowser();
+        }
+      }
+
+      if (cancelRequested) {
+        statusEl.textContent = `停止しました（${progressEl.value.toLocaleString()} / ${rounds.toLocaleString()} 回）`;
+      } else if (digest) {
+        outputEl.value = toHex(digest);
+        copyBtn.disabled = false;
+        const seconds = ((performance.now() - started) / 1000).toFixed(2);
+        statusEl.textContent = `完了：${rounds.toLocaleString()} 回／${seconds} 秒`;
+      }
+    } catch (error) {
+      statusEl.textContent = `エラー：${error.message || error}`;
+    } finally {
+      runBtn.disabled = false;
+      cancelBtn.disabled = true;
+    }
+  });
+
+  cancelBtn.addEventListener('click', () => {
+    cancelRequested = true;
+    cancelBtn.disabled = true;
+    statusEl.textContent = '停止しています…';
+  });
+
+  copyBtn.addEventListener('click', async () => {
+    if (!outputEl.value) return;
+    try {
+      // Clipboard API may be unavailable for file:// pages; provide manual copy fallback.
+      if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable');
+      await navigator.clipboard.writeText(outputEl.value);
+      statusEl.textContent = 'ハッシュをコピーしました。';
+    } catch {
+      outputEl.focus();
+      outputEl.select();
+      statusEl.textContent = '自動コピーできませんでした。結果を選択したので手動でコピーしてください。';
+    }
+  });
+})();
+</script>
+</body>
+</html>
